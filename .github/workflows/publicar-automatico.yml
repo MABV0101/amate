@@ -1,0 +1,87 @@
+name: Publicación automática
+
+# Publica sin intervención humana. El control de calidad es la doble
+# verificación del agente, y el diseño falla cerrado: si algo no cuadra,
+# el día se queda vacío en lugar de publicarse mal.
+#
+# 09:00 UTC = 3:00 a.m. en Morelos. Se investiga la fecha de MAÑANA,
+# para que lo publicado ya esté en el sitio cuando amanezca.
+
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+    inputs:
+      dia:
+        description: 'Día a publicar (MM-DD). Vacío = mañana.'
+        required: false
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: publicacion-automatica
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Investigar, verificar y publicar
+        id: agente
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DIA_MANUAL: ${{ inputs.dia }}
+        run: node agente/publicar.js
+
+      - name: Comprobar que el sitio sigue compilando
+        run: node build.js
+
+      - name: Guardar en el archivo
+        if: steps.agente.outputs.publicadas != '0'
+        run: |
+          git config user.name  'Agente de Amate'
+          git config user.email 'agente@amate.local'
+          git add contenido/efemerides/
+          git commit -m "Publica hoja ${{ steps.agente.outputs.dia }} (verificación automática)" || exit 0
+          git push
+
+      # Publicado ya está, pero el ojo humano llega después: cada tanda
+      # abre un pendiente de auditoría. Al confirmarlo, el cronista cambia
+      # verificacion: automatica → humana y el sello del sitio cambia solo.
+      - name: Abrir pendiente de auditoría
+        if: steps.agente.outputs.publicadas != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const r = JSON.parse(fs.readFileSync('resumen-agente.json', 'utf8'));
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Auditar hoja ${r.dia} · ${r.publicadas} capas automáticas`,
+              labels: ['auditoría', 'verificación-automática'],
+              body: [
+                `Ya está publicado en el sitio. Esto es revisión posterior, no autorización.`,
+                ``,
+                `Candidatas: ${r.candidatas} · Publicadas: ${r.publicadas}`,
+                ``,
+                '```',
+                r.registro.join('\n'),
+                '```',
+                ``,
+                `Al confirmar contra la fuente, cambia \`verificacion: "automatica"\` por`,
+                `\`verificacion: "humana"\` en \`contenido/efemerides/${r.dia}.md\`.`,
+                `El sello del sitio cambia solo.`,
+                ``,
+                `Si algo no resiste: bórralo del archivo y anótalo en el cuerpo de la hoja.`,
+                `Nunca lo borres en silencio.`
+              ].join('\n')
+            });

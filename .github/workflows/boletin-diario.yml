@@ -1,0 +1,74 @@
+name: Boletín diario
+
+# 12:00 UTC = 6:00 a.m. en Morelos (UTC-6, sin horario de verano desde 2022).
+# GitHub puede retrasar los cron unos minutos cuando hay carga; para el
+# boletín eso da igual, y la hoja del portal ya rota sola en el navegador.
+on:
+  schedule:
+    - cron: '0 12 * * *'
+  workflow_dispatch:        # permite lanzarlo a mano desde la pestaña Actions
+
+jobs:
+  enviar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Construir el sitio
+        run: node build.js
+
+      - name: Leer la hoja de hoy
+        id: hoja
+        run: |
+          CLAVE=$(TZ=America/Mexico_City date +%m-%d)
+          ARCHIVO="_publicado/boletin/${CLAVE}.txt"
+          if [ -f "$ARCHIVO" ]; then
+            echo "hay=si" >> $GITHUB_OUTPUT
+            {
+              echo 'texto<<FIN'
+              cat "$ARCHIVO"
+              echo 'FIN'
+            } >> $GITHUB_OUTPUT
+          else
+            echo "hay=no" >> $GITHUB_OUTPUT
+            echo "El $CLAVE no tiene hoja todavía. No se envía boletín."
+          fi
+
+      # --- Telegram: el más simple de configurar y el que menos se rompe.
+      # Crea un bot con @BotFather, agrégalo al canal, y guarda en
+      # Settings → Secrets and variables → Actions:
+      #   TELEGRAM_TOKEN y TELEGRAM_CANAL
+      - name: Enviar a Telegram
+        if: steps.hoja.outputs.hay == 'si' && env.TELEGRAM_TOKEN != ''
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CANAL: ${{ secrets.TELEGRAM_CANAL }}
+        run: |
+          curl -s -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CANAL}" \
+            --data-urlencode "text=${{ steps.hoja.outputs.texto }}" \
+            --data-urlencode "disable_web_page_preview=false"
+
+      # --- Correo a la lista de suscriptores (opcional).
+      # Requiere los secretos CORREO_USUARIO, CORREO_CLAVE y CORREO_LISTA.
+      - name: Enviar por correo
+        if: steps.hoja.outputs.hay == 'si' && env.CORREO_USUARIO != ''
+        env:
+          CORREO_USUARIO: ${{ secrets.CORREO_USUARIO }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.CORREO_USUARIO }}
+          password: ${{ secrets.CORREO_CLAVE }}
+          from: Amate · Crónicas de Morelos
+          to: ${{ secrets.CORREO_LISTA }}
+          subject: 'Amate · hoy en la historia de Morelos'
+          body: ${{ steps.hoja.outputs.texto }}

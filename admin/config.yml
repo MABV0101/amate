@@ -1,0 +1,83 @@
+# Escritorio del cronista · Decap CMS
+# Escribe archivos .md directamente en el repositorio de GitHub.
+# Cambia "usuario/amate" por tu repositorio real antes de publicar.
+
+backend:
+  name: git-gateway
+  branch: main
+  commit_messages:
+    create: 'Nueva {{collection}}: {{slug}}'
+    update: 'Corrige {{collection}}: {{slug}}'
+    delete: 'Retira {{collection}}: {{slug}}'
+
+# Toda propuesta entra como borrador y requiere aprobación del consejo.
+publish_mode: editorial_workflow
+
+media_folder: 'sitio/acervo'
+public_folder: '/acervo'
+
+locale: 'es'
+
+collections:
+  - name: 'efemerides'
+    label: 'Hojas de efeméride'
+    label_singular: 'Hoja'
+    folder: 'contenido/efemerides'
+    create: true
+    slug: '{{fields.dia}}'
+    summary: '{{dia}} — {{capas.0.texto}}'
+    description: >
+      Una hoja por día del calendario, 366 en total. No se crea una nueva cada
+      año: se abre la del día y se le agrega una capa más. Nunca borres capas
+      anteriores.
+    fields:
+      - { name: 'dia', label: 'Día (MM-DD)', widget: 'string', pattern: ['^\d{2}-\d{2}$', 'Usa el formato MM-DD, por ejemplo 07-28'] }
+      - { name: 'actualizado', label: 'Última actualización', widget: 'date', format: 'YYYY-MM-DD' }
+      - name: 'capas'
+        label: 'Capas territoriales'
+        label_singular: 'Capa'
+        widget: 'list'
+        hint: 'Ordena de lo más cercano a lo más lejano: municipio, estado, país, mundo.'
+        fields:
+          - { name: 'ambito', label: 'Ámbito', widget: 'select', options: ['Cuautla', 'Morelos', 'México', 'Mundo'] }
+          - { name: 'anio', label: 'Año', widget: 'string' }
+          - { name: 'texto', label: 'Qué ocurrió', widget: 'text' }
+      - { name: 'fuentes', label: 'Fuentes', widget: 'list', required: false, field: { name: 'fuente', label: 'Referencia', widget: 'string' } }
+      - { name: 'body', label: 'Glosa del cronista', widget: 'markdown', required: false }
+
+  - name: 'cronicas'
+    label: 'Piezas'
+    label_singular: 'Pieza'
+    folder: 'contenido/cronicas'
+    create: true
+    slug: '{{year}}-{{month}}-{{day}}-{{slug}}'
+    fields:
+      - { name: 'titulo', label: 'Título', widget: 'string' }
+      - { name: 'fecha', label: 'Fecha de publicación', widget: 'date', format: 'YYYY-MM-DD' }
+      - { name: 'autor', label: 'Cronista', widget: 'relation', collection: 'autores', search_fields: ['titulo'], value_field: '{{slug}}', display_fields: ['titulo'] }
+      - name: 'seccion'
+        label: 'Tipo de pieza'
+        widget: 'select'
+        hint: 'Esto le dice al lector qué tanto creerle. No lo elijas por comodidad.'
+        options:
+          - { label: 'Crónica — narración con fuentes verificables', value: 'cronica' }
+          - { label: 'Testimonio — alguien recuerda', value: 'testimonio' }
+          - { label: 'Acervo — documento, plano o fotografía', value: 'acervo' }
+          - { label: 'Toponimia — origen de un nombre', value: 'toponimia' }
+          - { label: 'Obituario', value: 'obituario' }
+      - { name: 'lugar', label: 'Lugar', widget: 'string', required: false }
+      - { name: 'resumen', label: 'Resumen', widget: 'text', hint: 'Dos líneas. Es lo que se ve en la portada y en el buscador.' }
+      - { name: 'fuentes', label: 'Fuentes', widget: 'list', required: false, field: { name: 'fuente', label: 'Referencia', widget: 'string' } }
+      - { name: 'borrador', label: 'Mantener sin publicar', widget: 'boolean', default: false, required: false }
+      - { name: 'body', label: 'Texto', widget: 'markdown' }
+
+  - name: 'autores'
+    label: 'Cronistas'
+    label_singular: 'Cronista'
+    folder: 'contenido/autores'
+    create: true
+    slug: '{{slug}}'
+    fields:
+      - { name: 'titulo', label: 'Nombre', widget: 'string' }
+      - { name: 'municipio', label: 'Municipio', widget: 'string', required: false }
+      - { name: 'semblanza', label: 'Semblanza', widget: 'text' }

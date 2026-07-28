@@ -1,0 +1,60 @@
+name: Propuesta de hoja
+
+# El agente NO publica. Abre un pull request con una hoja candidata y sus
+# referencias, para que un cronista la apruebe o la cierre. Esa revisión
+# humana es la única razón por la que este portal puede ser citado.
+#
+# Corre a las 03:00 en Morelos, para que la propuesta esté esperando cuando
+# el cronista despierte, y siempre para la fecha de MAÑANA: así hay margen
+# de revisar antes de que la hoja salga en portada.
+
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+    inputs:
+      dia:
+        description: 'Día a investigar (MM-DD). Vacío = mañana.'
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  proponer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Investigar y redactar la propuesta
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DIA_MANUAL: ${{ inputs.dia }}
+        run: node agente/proponer.js
+
+      - name: Abrir pull request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: propuesta/hoja-${{ github.run_number }}
+          title: 'Propuesta de hoja para revisión'
+          labels: 'propuesta-automática, sin-verificar'
+          delete-branch: true
+          body: |
+            Propuesta generada automáticamente. **No está verificada.**
+
+            Antes de aprobar, el cronista debe:
+
+            - [ ] Confirmar cada fecha contra la fuente citada, no contra el resumen.
+            - [ ] Comprobar que la fuente existe y dice lo que se le atribuye.
+            - [ ] Descartar cualquier capa cuya referencia no se haya podido abrir.
+            - [ ] Reescribir el texto con voz propia; lo generado es un borrador de trabajo.
+
+            Si una sola capa no resiste la comprobación, cierra el pull request
+            completo. Es más barato perder un día de calendario que meter un
+            dato falso a un archivo permanente.
+          commit-message: 'Propone hoja para revisión del consejo'
