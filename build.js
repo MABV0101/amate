@@ -410,7 +410,26 @@ ${resto.length ? `
   })();
 </script>`;
 
-  escribir('index.html', pagina({ cuerpo, canonica: '/' }));
+  // El correo de invitación aterriza en la portada con un código en la
+  // dirección (#invite_token=...). Sin este componente aquí, el código no lo
+  // recoge nadie y la invitación parece no funcionar. Una vez que el cronista
+  // entra, lo manda solo al escritorio.
+  const identidad = `
+<script src="https://identity.netlify.com/v1/netlify-identity-widget.js" defer></script>
+<script>
+  window.addEventListener('load', function () {
+    if (!window.netlifyIdentity) return;
+    window.netlifyIdentity.on('init', function (usuario) {
+      if (!usuario) {
+        window.netlifyIdentity.on('login', function () {
+          document.location.href = '/admin/';
+        });
+      }
+    });
+  });
+</script>`;
+
+  escribir('index.html', pagina({ cuerpo: cuerpo + identidad, canonica: '/' }));
 }
 
 /* ---------- efemérides: índice y hojas -------------------------- */
