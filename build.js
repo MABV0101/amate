@@ -20,6 +20,17 @@ const SITIO = {
   descripcion:
     'Portal de crónica, memoria oral y acervo documental de Morelos. Un archivo perpetuo del territorio.',
   licencia: 'CC BY-SA 4.0',
+  correo: 'estrategia03@gmail.com',
+
+  /* Mientras sea true, el sitio se declara NO INDEXABLE: sin canónicas,
+     con noindex y con robots.txt cerrado. Es lo correcto mientras la
+     dirección sea provisional: indexar bajo un nombre que vas a abandonar
+     es peor que no indexar.
+
+     Cámbialo a false SÓLO cuando: (1) el dominio definitivo esté
+     registrado, (2) SITIO.url apunte a ese dominio, y (3) el contenido
+     de ejemplo esté sustituido por piezas reales. */
+  provisional: true,
 };
 
 const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio',
@@ -146,6 +157,7 @@ function cargar(carpeta) {
 
 const autores = cargar('autores');
 const efemerides = cargar('efemerides');
+const pistas = cargar('pistas');
 const cronicas = cargar('cronicas')
   .filter(c => c.borrador !== 'true')
   .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
@@ -180,7 +192,9 @@ function pagina({ titulo, descripcion, cuerpo, clase = '', canonica = '' }) {
 <meta property="og:description" content="${esc(descripcion || SITIO.descripcion)}">
 <meta property="og:type" content="article">
 <meta property="og:locale" content="es_MX">
-${canonica ? `<link rel="canonical" href="${SITIO.url}${canonica}">` : ''}
+${SITIO.provisional
+  ? '<meta name="robots" content="noindex, nofollow">'
+  : (canonica ? `<link rel="canonical" href="${SITIO.url}${canonica}">` : '')}
 <link rel="alternate" type="application/rss+xml" title="${SITIO.nombre}" href="/feed.xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -201,6 +215,7 @@ ${canonica ? `<link rel="canonical" href="${SITIO.url}${canonica}">` : ''}
       <a href="/cronicas/">Crónicas</a>
       <a href="/archivo/">Archivo</a>
       <a href="/cronistas/">Cronistas</a>
+      <a href="/colaborar/">Colaborar</a>
       <a href="/buscar/">Buscar</a>
     </nav>
   </div>
@@ -227,7 +242,9 @@ ${cuerpo}
       <p class="pie-nota">Textos bajo licencia ${SITIO.licencia}: se pueden
       reproducir citando autor y portal. Las imágenes de acervo familiar
       conservan los derechos de quien las aportó.</p>
-      <p class="pie-nota"><a href="/feed.xml">Sindicación RSS</a> ·
+      <p class="pie-nota"><a href="/colaborar/">Enviar material</a> ·
+      ${pistas.length ? '<a href="/pistas/">Pistas por confirmar</a> · ' : ''}
+      <a href="/feed.xml">Sindicación RSS</a> ·
       <a href="/admin/">Escritorio del cronista</a></p>
     </div>
   </div>
@@ -260,16 +277,26 @@ function hojaEfemeride(ef, { enlace = true } = {}) {
   const [mes, dia] = ef.nombre.split('-');
   const capas = (ef.capas || []).map(capa => {
     const modo = capa.verificacion || 'humana';
-    const sello = modo === 'humana'
-      ? '<span class="sello sello--humana" title="Comprobada por un cronista contra la fuente original">Verificada por cronista</span>'
-      : `<span class="sello sello--maquina" title="Publicada por el agente tras doble verificación automática. Aún no la revisa una persona.">Verificación automática${capa.fuente ? ` · <a href="${esc(capa.fuente)}">fuente</a>` : ''}</span>`;
+    const enlaceFuente = capa.fuente ? ` · <a href="${esc(capa.fuente)}">fuente</a>` : '';
+    let sello;
+    if (modo === 'humana') {
+      sello = '<span class="sello sello--humana" title="Comprobada por un cronista contra la fuente original.">Verificada por cronista</span>';
+    } else if (capa.confianza === 'sin_confirmar') {
+      sello = `<span class="sello sello--sinconfirmar">Sin confirmar</span>${enlaceFuente ? `<span class="sello-fuente">${enlaceFuente.replace(' · ', '')}</span>` : ''}`;
+    } else if (capa.confianza === 'media') {
+      sello = `<span class="sello sello--media" title="El verificador encontró un error en el dato original y lo corrigió contra una fuente independiente. Todavía no la revisa una persona.">Confianza media · dato corregido${enlaceFuente}</span>`;
+    } else {
+      sello = `<span class="sello sello--maquina" title="Confirmada contra la fuente y corroborada por una segunda independiente. Todavía no la revisa una persona.">Confianza alta · automática${enlaceFuente}</span>`;
+    }
     return `
     <li class="capa capa--${slug(capa.ambito)}">
       <span class="capa-ambito">${esc(capa.ambito)}</span>
       <span class="capa-anio">${esc(capa.anio)}</span>
-      <div class="capa-texto">
+      <div class="capa-texto${capa.confianza === 'sin_confirmar' ? ' capa-texto--dudosa' : ''}">
         <p>${enLinea(capa.texto || '')}</p>
         ${sello}
+        ${capa.confianza === 'sin_confirmar' && capa.motivo ? `
+        <p class="motivo-duda"><span class="motivo-etiqueta">Por qué no se pudo confirmar</span>${esc(capa.motivo)}</p>` : ''}
       </div>
     </li>`;
   }).join('');
@@ -283,7 +310,14 @@ function hojaEfemeride(ef, { enlace = true } = {}) {
   <div class="hoja-cuerpo">
     <ol class="capas">${capas}</ol>
     ${ef.cuerpo.trim() ? `<div class="hoja-glosa">${markdown(ef.cuerpo)}</div>` : ''}
-    ${(ef.capas || []).some(c => c.verificacion === 'automatica') ? `
+    ${(ef.capas || []).some(c => c.confianza === 'sin_confirmar') ? `
+    <p class="aviso-verificacion aviso-verificacion--fuerte"><strong>Esta hoja
+    incluye datos SIN CONFIRMAR.</strong> Son hallazgos que no resistieron la
+    verificación: la fuente no se pudo corroborar de forma independiente o el
+    dato se contradice con otras fuentes. Se publican para no perder la pista,
+    pero <strong>no deben citarse como ciertos</strong> mientras no los
+    respalde un documento. El motivo del rechazo va impreso debajo de cada
+    uno.</p>` : (ef.capas || []).some(c => c.verificacion === 'automatica') ? `
     <p class="aviso-verificacion"><strong>Parte de esta hoja se publicó
     automáticamente.</strong> El agente sólo publica lo que confirmó contra una
     fuente y corroboró con una segunda independiente, pero todavía no la ha leído
@@ -360,6 +394,7 @@ ${resto.length ? `
     <p class="convocatoria-nota">Cada aportación se revisa contra el criterio
     de fuentes antes de publicarse, y se marca si es documento, memoria oral
     o interpretación.</p>
+    <p><a class="boton" href="/colaborar/">Cómo enviar tu material</a></p>
   </div>
 </section>
 
@@ -652,6 +687,115 @@ function construirBuscador() {
 }
 
 
+
+/* ---------- colaborar y pistas por confirmar -------------------- */
+
+function construirColaborar() {
+  escribir('colaborar/index.html', pagina({
+    titulo: 'Colaborar',
+    descripcion: 'Cómo enviar una crónica, una fotografía o un documento al archivo de Amate.',
+    canonica: '/colaborar/',
+    cuerpo: `
+<section class="encabezado-seccion">
+  <div class="marco columna">
+    <p class="eyebrow">Para cronistas y vecinos</p>
+    <h1>Cómo enviar tu material</h1>
+    <p class="entrada">Este archivo se hace entre todos. Si tienes una crónica
+    escrita, una fotografía antigua, un plano, un contrato de hacienda o la
+    grabación de alguien que recuerda el pueblo de antes, aquí es donde llega.</p>
+  </div>
+</section>
+
+<div class="marco columna">
+  <p class="correo-caja">
+    <span class="correo-etiqueta">Escríbenos a</span>
+    <a class="correo-dir" href="mailto:${SITIO.correo}?subject=Colaboraci%C3%B3n%20para%20Amate">${SITIO.correo}</a>
+  </p>
+
+  <h2>Qué incluir en el correo</h2>
+  <ol class="lista-envio">
+    <li><strong>El texto o el archivo.</strong> Si es fotografía o documento,
+    escanéalo lo más grande que puedas. Vale más una foto de celular bien
+    iluminada que un escaneo chico.</li>
+    <li><strong>De dónde salió.</strong> Quién la tomó o dónde apareció, si se
+    sabe. Un "era de mi abuela, vivía en el barrio de Santo Domingo" es
+    procedencia válida y suficiente.</li>
+    <li><strong>Cómo quieres aparecer.</strong> Con tu nombre completo, con
+    iniciales o de forma anónima. Tú decides.</li>
+    <li><strong>Tu autorización para publicarla.</strong> Basta una línea en el
+    cuerpo del correo diciendo que autorizas su publicación en el portal.</li>
+  </ol>
+
+  <h2>Qué pasa después</h2>
+  <p>El consejo editorial revisa el material y lo clasifica. Si es un documento
+  se publica como <em>acervo</em>, con su ficha. Si es un recuerdo se publica
+  como <em>testimonio</em>, con la fecha de la entrevista. Si es una narración
+  con fuentes se publica como <em>crónica</em>. Esa etiqueta le dice al lector
+  qué tan cierto es lo que está leyendo, y por eso no se pone al azar.</p>
+
+  <p>Si el material necesita verificación y no la resiste, te lo decimos y te
+  explicamos por qué. No se publica nada sin comprobar, ni se descarta nada sin
+  avisar.</p>
+
+  <h2>Lo que pasa con tus derechos</h2>
+  <p><strong>El original se queda contigo.</strong> El portal sólo publica una
+  copia digital. Las fotografías de acervo familiar conservan los derechos de
+  quien las aporta: no se ceden al portal ni pasan a dominio público por
+  publicarse aquí.</p>
+  <p>Los textos del portal se publican bajo licencia ${SITIO.licencia}, que
+  permite reproducirlos citando al autor y al portal. Si prefieres otras
+  condiciones para tu material, dilo en el correo y lo respetamos.</p>
+
+  <h2>Una petición</h2>
+  <p>Si la persona que recuerda es mayor, <strong>graba la conversación</strong>
+  aunque no la transcribas. Un audio de teléfono basta. Es lo primero que se
+  pierde cuando alguien se va, y no hay forma de recuperarlo después.</p>
+</div>`,
+  }));
+}
+
+function construirPistas() {
+  if (!pistas.length) return;
+
+  const items = pistas.flatMap(p =>
+    (p.pendientes || []).map(x => ({ ...x, dia: p.nombre }))
+  );
+  if (!items.length) return;
+
+  escribir('pistas/index.html', pagina({
+    titulo: 'Pistas por confirmar',
+    descripcion: 'Hallazgos que no resistieron la verificación y esperan comprobación documental.',
+    canonica: '/pistas/',
+    cuerpo: `
+<section class="encabezado-seccion">
+  <div class="marco columna">
+    <p class="eyebrow">Material de trabajo</p>
+    <h1>Pistas por confirmar</h1>
+    <p class="entrada"><strong>Nada de esta página está publicado como cierto.</strong>
+    Son hallazgos que no resistieron la verificación: la fuente no se pudo
+    corroborar de forma independiente, o el dato se contradice con otras
+    fuentes. Se conservan porque una pista mala puede llevar a un documento
+    bueno, y porque tirarlas equivaldría a repetir la búsqueda cada año.</p>
+    <p class="entrada">Si confirmas alguna contra un documento de archivo,
+    escribe a <a href="mailto:${SITIO.correo}">${SITIO.correo}</a> y pasa a la
+    hoja del día como capa verificada.</p>
+  </div>
+</section>
+<div class="marco columna">
+  ${items.map(x => {
+    const [m, d] = x.dia.split('-');
+    return `<article class="pista">
+      <p class="pista-fecha"><a href="/efemerides/${esc(x.dia)}/">${Number(d)} de ${MESES[Number(m) - 1]}</a>
+      ${x.anio ? ` · ${esc(x.anio)}` : ''} ${x.ambito ? ` · ${esc(x.ambito)}` : ''}</p>
+      <p class="pista-texto">${enLinea(x.texto || '')}</p>
+      <p class="pista-motivo"><span class="pista-etiqueta">Por qué no se publicó</span>
+      ${enLinea(x.motivo || '')}</p>
+    </article>`;
+  }).join('')}
+</div>`,
+  }));
+}
+
 /* ---------- boletín diario en texto plano ----------------------
    Un archivo por día, servido como estático. Un bot puede pedir
    https://amate.mx/boletin/07-28.txt y publicarlo sin API ni servidor.
@@ -660,9 +804,17 @@ function construirBuscador() {
 function construirBoletin() {
   for (const ef of efemerides) {
     const [mes, dia] = ef.nombre.split('-');
-    const capas = (ef.capas || [])
-      .map(c => `${c.ambito}, ${c.anio}\n${c.texto}`)
-      .join('\n\n');
+    // Todo sale al boletín, incluido lo no confirmado. Como en un canal de
+    // difusión el párrafo se lee suelto, la marca va DENTRO del texto y no
+    // como nota aparte: así no se puede separar de la afirmación.
+    const capas = (ef.capas || []).map(c => {
+      if (c.confianza !== 'sin_confirmar') {
+        return `${c.ambito}, ${c.anio}\n${c.texto}`;
+      }
+      return `${c.ambito}, ${c.anio} — SIN CONFIRMAR\n${c.texto}\n` +
+             `(Dato no corroborado. ${c.motivo || 'Sin corroboración independiente.'})`;
+    }).join('\n\n');
+    if (!capas.trim()) continue;
     const texto =
 `AMATE · Crónicas de Morelos
 Hoy, ${Number(dia)} de ${MESES[Number(mes) - 1]}
@@ -723,7 +875,9 @@ ${items}
 ${urls.map(u => `<url><loc>${SITIO.url}${u}</loc></url>`).join('\n')}
 </urlset>`);
 
-  escribir('robots.txt', `User-agent: *\nAllow: /\nSitemap: ${SITIO.url}/sitemap.xml\n`);
+  escribir('robots.txt', SITIO.provisional
+    ? `# Dirección provisional: no indexar todavía.\nUser-agent: *\nDisallow: /\n`
+    : `User-agent: *\nAllow: /\nSitemap: ${SITIO.url}/sitemap.xml\n`);
 
   escribir('404.html', pagina({
     titulo: 'Página no encontrada',
@@ -749,6 +903,8 @@ construirCronicas();
 construirArchivo();
 construirCronistas();
 construirBuscador();
+construirColaborar();
+construirPistas();
 construirBoletin();
 construirExtras();
 

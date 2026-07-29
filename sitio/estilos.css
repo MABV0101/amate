@@ -384,3 +384,78 @@ h2 { font-family: var(--display); font-weight: 600; letter-spacing: -.015em; lin
   font-size: .92rem; color: var(--corteza-sua); max-width: 52rem;
 }
 .aviso-verificacion strong { color: var(--corteza); }
+
+/* ---------- confianza media, colaborar y pistas ------------------ */
+
+.sello--media {
+  color: var(--cochinilla);
+  border-style: dashed;
+}
+
+.correo-caja {
+  border: 1px solid var(--corteza); border-left: 5px solid var(--cochinilla);
+  background: var(--amate-claro); padding: 1.2rem 1.4rem; margin: 0 0 2.5rem;
+}
+.correo-etiqueta {
+  display: block; font-family: var(--util); font-size: .68rem;
+  letter-spacing: .16em; text-transform: uppercase;
+  color: var(--corteza-sua); margin-bottom: .4rem;
+}
+.correo-dir {
+  font-family: var(--display); font-weight: 600;
+  font-size: clamp(1.2rem, 3.5vw, 1.75rem); letter-spacing: -.01em;
+  word-break: break-all;
+}
+
+.lista-envio { padding-left: 1.2rem; margin: 0 0 2rem; }
+.lista-envio li { margin-bottom: .8rem; }
+
+.boton {
+  display: inline-block; margin-top: .6rem;
+  font-family: var(--util); font-size: .74rem; letter-spacing: .12em;
+  text-transform: uppercase; text-decoration: none;
+  border: 1.5px solid var(--corteza); color: var(--corteza);
+  padding: .55rem 1rem;
+}
+.boton:hover { background: var(--corteza); color: var(--amate); }
+
+.pista {
+  border-top: 1px solid var(--fibra);
+  border-left: 3px dashed var(--corteza-sua);
+  padding: 1.1rem 0 1.2rem 1.1rem; margin-bottom: .4rem;
+}
+.pista-fecha {
+  font-family: var(--util); font-size: .72rem; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--corteza-sua); margin: 0 0 .5rem;
+}
+.pista-texto { margin: 0 0 .8rem; }
+.pista-motivo { margin: 0; font-size: .9rem; color: var(--corteza-sua); }
+.pista-etiqueta {
+  display: block; font-family: var(--util); font-size: .66rem;
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--cochinilla); margin-bottom: .25rem;
+}
+
+/* ---------- sin confirmar ---------------------------------------- */
+
+.sello--sinconfirmar {
+  background: var(--cochinilla); color: var(--amate-claro);
+  border-color: var(--cochinilla); font-weight: 500; cursor: default;
+}
+.sello-fuente {
+  font-family: var(--util); font-size: .64rem; letter-spacing: .08em;
+  text-transform: uppercase; margin-left: .5rem;
+}
+.capa-texto--dudosa > p:first-child { color: var(--corteza-sua); }
+
+.motivo-duda {
+  margin: .7rem 0 0; padding: .6rem .8rem;
+  border: 1px dashed var(--cochinilla);
+  font-size: .84rem; line-height: 1.5; color: var(--corteza-sua);
+}
+.motivo-etiqueta {
+  display: block; font-family: var(--util); font-size: .62rem;
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--cochinilla); margin-bottom: .3rem;
+}
+.aviso-verificacion--fuerte { border-left-color: var(--cochinilla); }

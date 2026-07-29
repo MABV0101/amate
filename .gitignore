@@ -1,3 +1,7 @@
 _publicado/
 node_modules/
 .DS_Store
+
+# Nunca subir credenciales
+*api*key*
+*.docx

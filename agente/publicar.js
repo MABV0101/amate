@@ -27,6 +27,13 @@ const ANIO_LIMITE = 1990;
 
 const raiz = path.join(__dirname, '..');
 const registro = [];
+
+/* Los motivos del verificador vienen largos; se recortan para que el archivo
+   .md siga siendo legible por una persona. */
+function recorta(t, n) {
+  const x = String(t || 'Sin corroboración independiente.').replace(/\s+/g, ' ').trim();
+  return x.length <= n ? x : x.slice(0, n - 1).replace(/[\s,;.]+\S*$/, '') + '…';
+}
 const log = m => { console.log(m); registro.push(m); };
 
 function diaObjetivo() {
@@ -104,10 +111,10 @@ Afirmación: el ${fechaTexto} de ${capa.anio}, ${capa.texto}
 Fuente alegada: ${capa.fuente}
 Cita alegada: ${capa.cita || '(ninguna)'}
 
-Busca de forma independiente. Después responde:
+Busca de forma independiente y comprueba:
 
 1. ¿La fuente existe y es accesible?
-2. ¿La fuente dice efectivamente eso, o se le está atribuyendo algo que no dice?
+2. ¿Dice efectivamente eso, o se le atribuye algo que no dice?
 3. ¿La FECHA EXACTA (día y mes) coincide? Este es el error más frecuente:
    un hecho real fechado en el día equivocado. Sé implacable aquí.
 4. ¿El año coincide?
@@ -115,12 +122,25 @@ Busca de forma independiente. Después responde:
 6. ¿Hay personas identificables probablemente vivas, o hechos posteriores
    a ${ANIO_LIMITE}?
 
-Rechaza si hay cualquier discrepancia, si la fuente es un blog sin respaldo, si
-es una wiki sin referencia, o si sólo pudiste confirmarlo con la misma fuente
-alegada. Ante la duda, rechaza: publicar de menos no cuesta nada.
+Emite UNO de estos tres veredictos:
+
+- "aprobado": todo coincide y lo corrobora una fuente independiente distinta
+  de la alegada.
+
+- "corregible": el hecho ES REAL y está documentado, pero la afirmación
+  contiene un error concreto que TÚ PUEDES CORREGIR con certeza (fecha, cifra,
+  nombre, atribución). Devuelve en "texto_corregido" la versión correcta,
+  redactada completa y sobria, en dos o tres oraciones, con el error ya
+  arreglado. Si al corregir el hecho deja de corresponder a un ${fechaTexto},
+  NO es corregible: es rechazado.
+
+- "rechazado": no pudiste confirmar que el hecho haya ocurrido, la fuente es
+  un blog o wiki sin respaldo, todas las menciones se rastrean a una sola
+  fuente circular, o hay riesgo de daño a personas. Ante la duda, rechaza.
 
 Responde SÓLO JSON:
-{"veredicto":"aprobado|rechazado","motivo":"...",
+{"veredicto":"aprobado|corregible|rechazado","motivo":"...",
+"texto_corregido":"(sólo si es corregible)",
 "fecha_coincide":true|false,"fuente_confirma":true|false,
 "corroboracion_independiente":"URL o vacío","riesgo_personas":true|false}`,
     { buscar: true });
@@ -150,6 +170,7 @@ async function principal() {
   log(`Candidatas: ${capas.length}.`);
 
   const aprobadas = [];
+  const pendientes = [];
   for (const capa of capas) {
     // Filtros duros antes de gastar una llamada de verificación.
     const anio = parseInt(capa.anio, 10);
@@ -170,30 +191,72 @@ async function principal() {
     try { v = await verificar(capa, fechaTexto); }
     catch (e) { log(`  ✗ ${capa.ambito} ${capa.anio}: falló la verificación (${e.message}).`); continue; }
 
-    const pasa = v.veredicto === 'aprobado' && v.fecha_coincide === true &&
-                 v.fuente_confirma === true && v.riesgo_personas !== true &&
+    // Toda publicación exige corroboración independiente y ausencia de riesgo.
+    const base = v.riesgo_personas !== true &&
                  /^https?:\/\//.test(v.corroboracion_independiente || '');
 
-    if (!pasa) {
-      log(`  ✗ ${capa.ambito} ${capa.anio}: rechazada. ${v.motivo || 'sin corroboración independiente'}`);
+    const alta = base && v.veredicto === 'aprobado' &&
+                 v.fecha_coincide === true && v.fuente_confirma === true;
+
+    const media = base && v.veredicto === 'corregible' &&
+                  typeof v.texto_corregido === 'string' &&
+                  v.texto_corregido.trim().length > 40;
+
+    // Riesgo a personas: NUNCA se publica, ni con etiqueta. No es duda
+    // histórica sino exposición legal, y ahí una etiqueta no protege a nadie.
+    if (v.riesgo_personas === true) {
+      log(`  ⛔ ${capa.ambito} ${capa.anio}: excluida por riesgo a personas. Sólo a pistas.`);
+      pendientes.push({
+        ambito: capa.ambito, anio: String(capa.anio), texto: capa.texto,
+        fuente: capa.fuente || '', motivo: recorta(v.motivo, 400),
+      });
       continue;
     }
 
-    log(`  ✓ ${capa.ambito} ${capa.anio}: aprobada. Corrobora ${v.corroboracion_independiente}`);
+    // Lo demás entra a la hoja, pero marcado sin confirmar y con el motivo
+    // impreso a la vista del lector.
+    if (!alta && !media) {
+      log(`  ⚠ ${capa.ambito} ${capa.anio}: publicada SIN CONFIRMAR. ${recorta(v.motivo, 120)}`);
+      aprobadas.push({
+        ambito: capa.ambito,
+        anio: String(capa.anio),
+        texto: capa.texto,
+        fuente: capa.fuente || '',
+        verificacion: 'automatica',
+        confianza: 'sin_confirmar',
+        motivo: recorta(v.motivo, 400),
+        publicada: new Date().toISOString().slice(0, 10),
+      });
+      pendientes.push({
+        ambito: capa.ambito, anio: String(capa.anio), texto: capa.texto,
+        fuente: capa.fuente || '', motivo: recorta(v.motivo, 400),
+      });
+      continue;
+    }
+
+    if (media) {
+      log(`  ~ ${capa.ambito} ${capa.anio}: CORREGIDA y publicada como confianza media. ${v.motivo}`);
+    } else {
+      log(`  ✓ ${capa.ambito} ${capa.anio}: aprobada, confianza alta. Corrobora ${v.corroboracion_independiente}`);
+    }
+
     aprobadas.push({
       ambito: capa.ambito,
       anio: String(capa.anio),
-      texto: capa.texto,
+      texto: media ? v.texto_corregido.trim() : capa.texto,
       fuente: capa.fuente,
       corrobora: v.corroboracion_independiente,
       verificacion: 'automatica',
+      confianza: media ? 'media' : 'alta',
       publicada: new Date().toISOString().slice(0, 10),
     });
   }
 
+  guardarPistas(dia, pendientes);
+
   if (!aprobadas.length) {
-    log('Ninguna capa pasó la verificación. No se publica nada. El día queda vacío.');
-    return finalizar(dia, capas.length, 0);
+    log('Ninguna capa pasó la verificación. No se publica nada en la hoja.');
+    return finalizar(dia, capas.length, 0, pendientes.length);
   }
 
   const orden = a => AMBITOS.indexOf(a.ambito);
@@ -211,16 +274,42 @@ async function principal() {
 
   fs.mkdirSync(path.dirname(ruta), { recursive: true });
   fs.writeFileSync(ruta, escribirFrontMatter(datos, previo.cuerpo));
-  log(`Publicadas ${aprobadas.length} capas nuevas en ${dia}.md`);
-  finalizar(dia, capas.length, aprobadas.length);
+  const sc = aprobadas.filter(a => a.confianza === 'sin_confirmar').length;
+  log(`Publicadas ${aprobadas.length} capas nuevas en ${dia}.md` +
+      (sc ? ` (${sc} marcadas SIN CONFIRMAR)` : ''));
+  finalizar(dia, capas.length, aprobadas.length, pendientes.length);
 }
 
-function finalizar(dia, candidatas, publicadas) {
-  const resumen = { dia, candidatas, publicadas, registro };
+/* Las pistas no se publican como ciertas: son material de trabajo para el
+   cronista. Se conservan porque una pista mala puede llevar a un documento
+   bueno, y porque tirarlas obliga a repetir la búsqueda cada año. */
+function guardarPistas(dia, pendientes) {
+  if (!pendientes.length) return;
+  const ruta = path.join(raiz, 'contenido', 'pistas', `${dia}.md`);
+  let previas = [];
+  if (fs.existsSync(ruta)) {
+    previas = (leerFrontMatter(fs.readFileSync(ruta, 'utf8')).datos.pendientes) || [];
+  }
+  const vistos = new Set(previas.map(p => `${p.anio}|${String(p.texto).slice(0, 60)}`));
+  const nuevas = pendientes.filter(p => !vistos.has(`${p.anio}|${String(p.texto).slice(0, 60)}`));
+  if (!nuevas.length) return;
+
+  fs.mkdirSync(path.dirname(ruta), { recursive: true });
+  fs.writeFileSync(ruta, escribirFrontMatter({
+    dia,
+    actualizado: new Date().toISOString().slice(0, 10),
+    pendientes: [...previas, ...nuevas],
+  }, ''));
+  log(`Guardadas ${nuevas.length} pistas por confirmar en pistas/${dia}.md`);
+}
+
+function finalizar(dia, candidatas, publicadas, pistas = 0) {
+  const resumen = { dia, candidatas, publicadas, pistas, registro };
   fs.writeFileSync(path.join(raiz, 'resumen-agente.json'), JSON.stringify(resumen, null, 2));
   // Lo lee el workflow para decidir si hay algo que confirmar.
   if (process.env.GITHUB_OUTPUT) {
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, `publicadas=${publicadas}\ndia=${dia}\n`);
+    fs.appendFileSync(process.env.GITHUB_OUTPUT,
+      `publicadas=${publicadas}\ndia=${dia}\npistas=${pistas}\n`);
   }
 }
 

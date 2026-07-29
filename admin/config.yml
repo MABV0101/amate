@@ -1,6 +1,7 @@
 # Escritorio del cronista · Decap CMS
 # Escribe archivos .md directamente en el repositorio de GitHub.
-# Cambia "usuario/amate" por tu repositorio real antes de publicar.
+# No hay que editar nada aquí: Git Gateway deduce el repositorio del sitio
+# de Netlify al que esté conectado. Sólo cambia "branch" si no usas main.
 
 backend:
   name: git-gateway

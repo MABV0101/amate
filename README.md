@@ -90,8 +90,10 @@ Para que los cronistas publiquen desde el navegador, sin Git ni terminal:
 2. **Identity → Registration → Invite only** (importante: si lo dejas abierto,
    cualquiera se registra y publica).
 3. **Identity → Services → Git Gateway → Enable**.
-4. En `admin/config.yml`, cambia `usuario/amate` por tu repositorio real.
-5. Invita a cada cronista por correo desde **Identity → Invite users**.
+4. Invita a cada cronista por correo desde **Identity → Invite users**.
+
+No hay que editar `admin/config.yml`: Git Gateway deduce el repositorio del
+sitio de Netlify al que está conectado.
 
 Entran en `tudominio.mx/admin/`. Escriben, adjuntan fotografías, y al guardar
 la pieza entra como **borrador**: `publish_mode: editorial_workflow` obliga a
@@ -295,6 +297,34 @@ día concreto, y revisa el `resumen-agente.json` que deja.
 - Cada tanto, audita una hoja vieja al azar. Si aparece un error que las dos
   pasadas dejaron pasar, ese es el momento de apretar el filtro, no después.
 
+
+---
+
+## Indexación: el orden correcto
+
+`SITIO.url` en `build.js` alimenta las canónicas, el sitemap, el RSS y el
+`robots.txt`. Apuntarla a una dirección equivocada es peor que no ponerla: una
+canónica hacia un dominio ajeno le dice a Google que indexe ese otro sitio.
+
+Por eso el proyecto arranca con `SITIO.provisional = true`, que produce
+`noindex, nofollow` en cada página, ninguna canónica y un `robots.txt` cerrado.
+
+**Orden de operaciones, de principio a fin:**
+
+1. Desplegar desde GitHub (no por arrastre: ese despliegue no se recompila
+   nunca y no admite Identity ni Git Gateway).
+2. Borrar cualquier sitio provisional de arrastre, para no dejar dos
+   direcciones sirviendo lo mismo.
+3. Consultar la Reserva de Derechos ante INDAUTOR. Si el título se niega, la
+   nomenclatura cambia y todo lo indexado se vuelve pasivo.
+4. Registrar el dominio definitivo y conectarlo en Netlify.
+5. Sustituir el contenido de ejemplo por piezas reales. Que lo primero que
+   Google vea no sea una crónica que dice "pieza de ejemplo".
+6. Poner `SITIO.url` con el dominio definitivo **y** `provisional: false`.
+7. Compilar, desplegar, y dar de alta el sitio en Google Search Console
+   enviando `/sitemap.xml`.
+
+Sólo en el paso 6 se toca `SITIO.url`. Antes no.
 
 ---
 
