@@ -188,6 +188,51 @@ archivista; la serif es la voz del narrador. Respeta esa separación.
 
 ---
 
+## Motor del calendario: Wikidata, no un modelo
+
+`agente/wikidata.js` es el **motor principal** de las efemérides. Consulta
+Wikidata por SPARQL y no usa modelo de lenguaje: sin llave de API, sin costo y
+**sin posibilidad de alucinar**, porque no hay nada que redactar libremente.
+Cada capa queda ligada a su QID y cualquiera puede abrirlo y comprobarla.
+
+La prosa se arma por plantilla a partir de los campos: "Nace en Anenecuilco
+Emiliano Zapata, militar." Sale sobria, que es el tono del portal, y no puede
+inventar una fecha porque la fecha viene de la consulta.
+
+Detalles que importan si tocas las consultas:
+
+- **Filtro de precisión.** Wikidata guarda las fechas con su precisión
+  declarada. Una fecha de precisión anual se almacena como `AAAA-01-01`, así
+  que sin `wikibase:timePrecision >= 11` toda persona con sólo año conocido
+  aparecería un 1 de enero. Ese filtro no se quita.
+- **Orden por `wikibase:sitelinks`.** El número de wikipedias que enlazan un
+  elemento es el mejor indicador disponible de notabilidad y evita que la hoja
+  se llene de futbolistas de tercera división.
+- **Agente de usuario.** Wikidata exige uno identificable. Está en la constante
+  `AGENTE`; no lo quites ni lo dejes genérico.
+- **Nunca adivines un QID.** `Q60305` parecía razonable para Morelos y resultó
+  ser la Torre de Jericó. Todas las consultas locales devolvían cero y parecía
+  un problema de cobertura del portal, no un error de configuración. Usa
+  `node agente/wikidata.js --buscar Cuautla` para resolver cualquier
+  identificador: lista los candidatos con su descripción y su número de wikis.
+- **Falla ruidosa al arrancar.** Antes de consultar nada, el script comprueba
+  que la etiqueta de `QID.morelos` contenga "Morelos" y aborta con instrucciones
+  si no. Un identificador equivocado no puede volver a fallar en silencio.
+- **Modo diagnóstico.** `node agente/wikidata.js --diagnostico` comprueba el
+  endpoint y todas las etiquetas configuradas.
+- **Plantillas separadas por tipo de consulta.** Muertes y hechos usan frases
+  distintas: mezclarlas produce cosas como "Otto von Bismarck (ser humano)".
+  Los tipos genéricos se filtran en `TIPOS_VACIOS`.
+
+El sello en el sitio es `verificacion: "wikidata"` y muestra el QID. Es la
+procedencia más fuerte del portal después de la comprobación humana: no depende
+de que un modelo haya leído bien.
+
+**Lo que Wikidata no resuelve:** su cobertura de historia municipal morelense
+es delgada. Da bien nacimientos y muertes de morelenses notables, algunos
+hechos mayores y fundaciones; no tiene el acta de cabildo. La sección siguiente
+sigue vigente.
+
 ## Cobertura local: el problema central del proyecto
 
 El agente encuentra fácilmente historia mundial y nacional, y casi nada de

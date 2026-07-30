@@ -472,3 +472,11 @@ h2 { font-family: var(--display); font-weight: 600; letter-spacing: -.015em; lin
   border-left: 3px solid var(--cana); background: var(--amate);
   font-size: .85rem; color: var(--corteza-sua); max-width: 48rem;
 }
+
+/* ---------- procedencia Wikidata --------------------------------- */
+
+.sello--wikidata {
+  color: var(--anil);
+  border-style: solid;
+  cursor: help;
+}

@@ -1,0 +1,51 @@
+name: Efemérides desde Wikidata
+
+# Motor principal del calendario. No usa modelo de lenguaje ni llave de API:
+# consulta Wikidata por SPARQL, así que no cuesta nada y no puede alucinar.
+# Cada capa queda ligada a su identificador permanente.
+#
+# 08:00 UTC = 2:00 a.m. en Morelos. Investiga la fecha de MAÑANA, para que
+# la hoja esté lista antes de salir en portada.
+
+on:
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+    inputs:
+      dia:
+        description: 'Día a consultar (MM-DD). Vacío = mañana.'
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: calendario
+  cancel-in-progress: false
+
+jobs:
+  consultar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Consultar Wikidata
+        id: agente
+        run: node agente/wikidata.js ${{ inputs.dia }}
+
+      - name: Comprobar que el sitio sigue compilando
+        run: node build.js
+
+      - name: Guardar en el archivo
+        if: steps.agente.outputs.publicadas != '0'
+        run: |
+          git config user.name  'Agente de Amate'
+          git config user.email 'agente@amate.local'
+          git add contenido/efemerides/
+          git commit -m "Wikidata: hoja ${{ steps.agente.outputs.dia }} (${{ steps.agente.outputs.morelenses }} capas de Morelos)" || exit 0
+          git pull --rebase --autostash
+          git push

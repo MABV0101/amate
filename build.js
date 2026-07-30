@@ -282,7 +282,9 @@ function hojaEfemeride(ef, { enlace = true } = {}) {
     const modo = capa.verificacion || 'humana';
     const enlaceFuente = capa.fuente ? ` · <a href="${esc(capa.fuente)}">fuente</a>` : '';
     let sello;
-    if (modo === 'humana') {
+    if (modo === 'wikidata') {
+      sello = `<span class="sello sello--wikidata" title="Dato tomado de Wikidata por consulta estructurada, no redactado por un modelo. El identificador permite comprobarlo en la fuente.">Wikidata · ${esc(capa.qid || '')}</span>${enlaceFuente ? `<span class="sello-fuente">${enlaceFuente.replace(' · ', '')}</span>` : ''}`;
+    } else if (modo === 'humana') {
       sello = '<span class="sello sello--humana" title="Comprobada por un cronista contra la fuente original.">Verificada por cronista</span>';
     } else if (capa.confianza === 'sin_confirmar') {
       const impresa = capa.fuente_impresa
