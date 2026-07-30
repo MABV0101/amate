@@ -18,10 +18,12 @@
 const fs = require('fs');
 const path = require('path');
 const { REPOSITORIOS, anclas } = require('./morelos');
+const { extraerJSON } = require('../lib/json');
 
 const MODELO = 'claude-sonnet-4-6';
 const ANIO_LIMITE = 1990;
-const MINIMO_FUENTES = 2;   // menos que esto y no se publica nada
+const MINIMO_FUENTES = 2;        // documentos distintos, no ligas distintas
+const MINIMO_INSTITUCIONES = 2;  // dominios distintos: evita la circularidad
 
 /* Modo de la pieza. Cambiar por variable de entorno MODO_PIEZA.
    ADVERTENCIA sobre 'cronica': una crónica exige conocimiento local que
@@ -41,7 +43,31 @@ const slug = s => String(s).toLowerCase().normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-')
   .replace(/^-|-$/g, '').slice(0, 60);
 
-async function preguntar(prompt, { buscar = false, tokens = 4000 } = {}) {
+
+/* Dominio institucional, no servidor. "bibliotecadigital.scjn.gob.mx" y
+   "emiliano-zapata.scjn.gob.mx" son dos máquinas de la MISMA institución:
+   la Suprema Corte. Comparar por servidor deja pasar la circularidad. */
+const SUFIJOS_COMPUESTOS = new Set([
+  'gob.mx', 'com.mx', 'edu.mx', 'org.mx', 'net.mx',
+  'co.uk', 'ac.uk', 'org.uk', 'gob.ar', 'com.ar', 'edu.ar',
+  'com.br', 'gov.br', 'edu.br', 'gob.es', 'com.es',
+  'gob.pe', 'edu.pe', 'gob.cl', 'gov.co', 'edu.co',
+]);
+
+function institucion(url) {
+  let host;
+  try { host = new URL(url).hostname.toLowerCase().replace(/^www\./, ''); }
+  catch { return null; }
+  const p = host.split('.');
+  if (p.length < 2) return host;
+  const dos = p.slice(-2).join('.');
+  // Con sufijo compuesto hacen falta tres etiquetas: scjn.gob.mx
+  return SUFIJOS_COMPUESTOS.has(dos) && p.length >= 3
+    ? p.slice(-3).join('.')
+    : dos;
+}
+
+async function preguntar(prompt, { buscar = false, tokens = 4000 } = {}, clave = null) {
   const cuerpo = {
     model: MODELO, max_tokens: tokens,
     messages: [{ role: 'user', content: prompt }],
@@ -61,9 +87,7 @@ async function preguntar(prompt, { buscar = false, tokens = 4000 } = {}) {
 
   const data = await r.json();
   const texto = data.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
-  const i = texto.indexOf('{'), f = texto.lastIndexOf('}');
-  if (i === -1 || f === -1) throw new Error('El modelo no devolvió JSON.');
-  return JSON.parse(texto.slice(i, f + 1));
+  return extraerJSON(texto, clave);
 }
 
 /* ---- qué tema tocar esta semana -------------------------------- */
@@ -134,8 +158,12 @@ ${REPOSITORIOS.map(r => '  · ' + r).join('\n')}
 Reglas que no se negocian:
 1. Sólo afirmaciones que hayas CONFIRMADO en páginas consultadas en esta
    sesión. Nada de memoria.
-2. Mínimo ${MINIMO_FUENTES} fuentes distintas y accesibles, con URL. Si no las
-   reúnes, devuelve {"suficiente": false} y nada más.
+2. Mínimo ${MINIMO_FUENTES} fuentes que sean DOCUMENTOS DISTINTOS y de al
+   menos ${MINIMO_INSTITUCIONES} INSTITUCIONES DISTINTAS (dominios distintos).
+   Dos ligas al mismo PDF no son dos fuentes, aunque estén en direcciones
+   diferentes. Si sólo reúnes una institución, busca en otra: hemeroteca,
+   repositorio universitario, archivo estatal, obra publicada. Si de plano no
+   lo logras, devuelve {"suficiente": false} y nada más.
 3. Nada posterior a ${ANIO_LIMITE}. Nada de personas probablemente vivas, ni de
    funcionarios en activo, ni de causas judiciales.
 4. Ninguna cita textual de más de quince palabras.
@@ -150,7 +178,7 @@ Responde SÓLO JSON:
  "cuerpo":"el texto en markdown",
  "fuentes":[{"referencia":"...","url":"https://..."}],
  "afirmaciones_clave":["afirmación verificable 1","afirmación 2","afirmación 3"]}`,
-    { buscar: true, tokens: 6000 });
+    { buscar: true, tokens: 6000 }, 'suficiente');
 }
 
 /* ---- verificación adversarial de las afirmaciones -------------- */
@@ -172,6 +200,9 @@ ${pieza.cuerpo}
 
 Comprueba de forma independiente:
 1. ¿Las URL existen y son accesibles?
+1b. ¿Son DOCUMENTOS DISTINTOS de INSTITUCIONES DISTINTAS, o son varias ligas
+   al mismo archivo? Si todo proviene de una sola institución o de un mismo
+   documento, RECHAZA: no hay corroboración independiente.
 2. ¿Cada afirmación clave se sostiene en las fuentes, o se les atribuye algo
    que no dicen?
 3. ¿Hay fechas, cifras, nombres o atribuciones equivocados? Sé implacable con
@@ -181,15 +212,20 @@ Comprueba de forma independiente:
    a ${ANIO_LIMITE}?
 6. ¿Hay citas textuales de más de quince palabras?
 
-Rechaza si alguna fuente no abre, si una afirmación clave no se sostiene, si
-hay invención narrativa, o si hay riesgo sobre personas. Ante la duda, rechaza.
+Rechaza si alguna fuente no abre, si todas las fuentes son el mismo documento
+o la misma institución, si una afirmación clave no se sostiene, si hay invención
+narrativa, o si hay riesgo sobre personas. Ante la duda, rechaza.
+
+Presta atención especial a los NÚMEROS DE ARTÍCULO, fechas y cifras citados:
+son los datos que más se deslizan y los que nadie vuelve a comprobar.
 
 Responde SÓLO JSON:
 {"veredicto":"aprobado|rechazado","motivo":"...",
-"fuentes_accesibles":true|false,"afirmaciones_sostenidas":true|false,
+"fuentes_accesibles":true|false,"fuentes_independientes":true|false,
+"afirmaciones_sostenidas":true|false,
 "invencion_narrativa":true|false,"riesgo_personas":true|false,
 "correcciones":["si algo es corregible, la corrección concreta"]}`,
-    { buscar: true, tokens: 3000 });
+    { buscar: true, tokens: 3000 }, 'veredicto');
 }
 
 /* ---- ejecución ------------------------------------------------- */
@@ -207,11 +243,27 @@ async function principal() {
     log(`Sólo ${(pieza.fuentes || []).length} fuentes. No alcanza el mínimo.`);
     return finalizar(0);
   }
+
+  // Dos ligas al mismo PDF no son dos fuentes. Se exigen dominios
+  // distintos: si todo viene de una institución, no hay corroboración
+  // independiente, hay una sola fuente citada dos veces.
+  const dominios = new Set();
+  for (const f of pieza.fuentes) {
+    const i = institucion(f.url);
+    if (i) dominios.add(i);
+  }
+  if (dominios.size < MINIMO_INSTITUCIONES) {
+    log(`Todas las fuentes vienen de ${dominios.size} institución(es): ` +
+        `${[...dominios].join(', ')}. No hay corroboración independiente. No se publica.`);
+    return finalizar(0);
+  }
+  log(`Instituciones distintas: ${[...dominios].join(', ')}.`);
   log(`Borrador: "${pieza.titulo}" con ${pieza.fuentes.length} fuentes.`);
 
   const v = await verificar(pieza);
   const pasa = v.veredicto === 'aprobado' &&
                v.fuentes_accesibles === true &&
+               v.fuentes_independientes !== false &&
                v.afirmaciones_sostenidas === true &&
                v.invencion_narrativa !== true &&
                v.riesgo_personas !== true;

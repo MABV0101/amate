@@ -11,6 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const { leerFrontMatter, escribirFrontMatter } = require('../lib/frontmatter');
 const { REPOSITORIOS, anclas } = require('./morelos');
+const { extraerJSON } = require('../lib/json');
 
 const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio',
   'agosto','septiembre','octubre','noviembre','diciembre'];
@@ -46,7 +47,7 @@ function diaObjetivo() {
          String(f.getUTCDate()).padStart(2, '0');
 }
 
-async function preguntar(prompt, { buscar = false } = {}) {
+async function preguntar(prompt, { buscar = false } = {}, clave = null) {
   const cuerpo = {
     model: MODELO,
     max_tokens: 3000,
@@ -67,9 +68,22 @@ async function preguntar(prompt, { buscar = false } = {}) {
 
   const data = await r.json();
   const texto = data.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
-  const i = texto.indexOf('{'), f = texto.lastIndexOf('}');
-  if (i === -1 || f === -1) throw new Error('El modelo no devolvió JSON.');
-  return JSON.parse(texto.slice(i, f + 1));
+  return extraerJSON(texto, clave);
+}
+
+/* La pasada local tiene el prompt más largo y es la que más veces devuelve
+   prosa después del JSON. Un reintento pidiendo sólo JSON sale barato y
+   evita perder la única búsqueda que trae valor local. */
+async function preguntarConReintento(prompt, opciones, clave) {
+  try {
+    return await preguntar(prompt, opciones, clave);
+  } catch (e) {
+    log(`  (reintento: ${e.message})`);
+    return preguntar(
+      prompt + '\n\nIMPORTANTE: responde ÚNICAMENTE con el objeto JSON. ' +
+      'Sin preámbulo, sin explicación posterior, sin cercas de markdown.',
+      opciones, clave);
+  }
 }
 
 /* ---- pasada 1: investigar -------------------------------------- */
@@ -94,7 +108,7 @@ ${previo ? `Ya está publicado lo siguiente. Propón sólo hechos DISTINTOS:\n${
 
 Responde SÓLO JSON:
 {"capas":[{"ambito":"...","anio":"1914","texto":"...","fuente":"https://...",
-"cita":"la frase de la fuente que respalda el hecho"}]}`, { buscar: true });
+"cita":"la frase de la fuente que respalda el hecho"}]}`, { buscar: true }, 'capas');
 }
 
 
@@ -106,7 +120,7 @@ Responde SÓLO JSON:
 
 async function investigarLocal(dia, fechaTexto, mesTexto, previo) {
   const a = anclas(dia);
-  return preguntar(`Eres investigador del archivo histórico de Morelos, México.
+  return preguntarConReintento(`Eres investigador del archivo histórico de Morelos, México.
 Tu ÚNICA tarea en esta pasada es encontrar hechos de MORELOS o de sus
 municipios. Nada de historia nacional ni mundial: eso lo cubre otra pasada.
 
@@ -148,7 +162,7 @@ ${previo ? `Ya está publicado esto; propón sólo hechos DISTINTOS:\n${previo}`
 Responde SÓLO JSON:
 {"capas":[{"ambito":"Cuautla|Morelos","anio":"1914","precision":"dia|mes",
 "texto":"...","fuente":"https://...","cita":"la frase que lo respalda"}]}`,
-    { buscar: true });
+    { buscar: true }, 'capas');
 }
 
 /* ---- pasada 2: verificación adversarial ------------------------ */
@@ -202,7 +216,7 @@ Responde SÓLO JSON:
 "texto_corregido":"(sólo si es corregible)",
 "fecha_coincide":true|false,"fuente_confirma":true|false,
 "corroboracion_independiente":"URL o vacío","riesgo_personas":true|false}`,
-    { buscar: true });
+    { buscar: true }, 'veredicto');
 }
 
 /* ---- ejecución ------------------------------------------------- */

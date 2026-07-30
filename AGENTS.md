@@ -249,12 +249,46 @@ Tiene tres modos, y la distinción es deliberada:
   portal y el lector deja de creerle a las buenas. Si se enciende, cada pieza se
   revisa antes de salir y no se deja correr sola.
 
-Controles que no se deben debilitar: mínimo de dos fuentes distintas y
-accesibles, verificación adversarial de cada afirmación clave, rechazo
-automático si hay invención narrativa, y falla cerrada. Las piezas automáticas
+Controles que no se deben debilitar: **dos fuentes que sean documentos
+distintos de instituciones distintas**, verificación adversarial de cada
+afirmación clave, rechazo automático si hay invención narrativa, y falla
+cerrada.
+
+Sobre lo de las instituciones: la comparación se hace por **dominio
+institucional**, no por servidor. `bibliotecadigital.scjn.gob.mx` y
+`emiliano-zapata.scjn.gob.mx` son dos máquinas de la misma Suprema Corte, así
+que cuentan como una sola fuente. Comparar por nombre de servidor deja pasar
+exactamente la circularidad que el control existe para evitar; la función
+`institucion()` en `agente/piezas.js` maneja los sufijos compuestos tipo
+`gob.mx`. Si agregas países, agrega sus sufijos ahí.
+
+Al auditar una pieza automática, **empieza por los números de artículo, fechas
+y cifras**. Son los datos que más se deslizan y los que nadie vuelve a
+comprobar. Las piezas automáticas
 llevan `verificacion: automatica`, lo que dispara un aviso visible en la página
 y una etiqueta en la tarjeta. Cuando una persona la valida, se quita ese campo
 y el aviso desaparece solo.
+
+## Extracción de JSON: no recortes de la primera a la última llave
+
+`lib/json.js` extrae el JSON de las respuestas del modelo recorriendo el texto
+con un contador de llaves que respeta cadenas y escapes, y devolviendo el
+objeto que traiga la clave esperada.
+
+Existe porque el método ingenuo —`texto.slice(primera llave, última llave)`—
+falla en cuanto el modelo escribe cualquier cosa después del JSON, y los
+prompts largos con búsqueda web casi siempre añaden una nota final. Ese fallo
+tumbó la pasada local de Morelos durante varios días sin que se notara: el
+agente seguía en verde, publicaba lo general, y sólo el registro decía
+`Pasada local falló`.
+
+Lección aplicable a todo el proyecto: **cuando un paso puede fallar en
+silencio, el registro tiene que decirlo con una línea propia**, y hay que
+leerlo. Un flujo en verde no significa que todo haya funcionado.
+
+La pasada local usa además `preguntarConReintento`: si el primer intento no
+devuelve JSON válido, repite pidiendo únicamente el objeto. Es la búsqueda más
+valiosa y la más frágil, así que vale la llamada extra.
 
 ## Sobre los agentes automáticos
 
