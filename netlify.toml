@@ -25,9 +25,10 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
 
-# Direcciones antiguas: aquí se agregan redirecciones si alguna
-# vez cambia una ruta. Nunca se borra una dirección publicada.
-[[redirects]]
-  from = "/efemerides/:mes-:dia"
-  to = "/efemerides/:mes-:dia/"
-  status = 301
+# Direcciones antiguas: aquí se agregan redirecciones si alguna vez cambia
+# una ruta. Nunca se borra una dirección publicada.
+#
+# CUIDADO al escribir reglas: un patrón que también coincide con su propio
+# destino produce un bucle infinito (ERR_TOO_MANY_REDIRECTS). Aquí había una
+# regla de ese tipo para las hojas de efeméride; se eliminó. Netlify ya
+# resuelve solo las direcciones sin diagonal final, así que no hacía falta.
