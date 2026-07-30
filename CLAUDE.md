@@ -213,10 +213,31 @@ Tres mecanismos intentan compensarlo. Si los tocas, no los debilites:
    entra a la hoja marcada como *sólo mes*, con nota al pie. Nunca inventes un
    día para que un hecho mensual parezca diario.
 
-Lo que **no** se debe hacer para mejorar la cobertura local: bajar el requisito
-de corroboración independiente para los hechos de Morelos. Son precisamente los
-que nadie va a poder desmentir y los que más se van a citar. Relajar el filtro
-ahí contamina el registro que el proyecto existe para salvar.
+**Política vigente para lo local, por decisión del director del portal:** se
+publica lo que se encuentre aunque no se pueda confirmar, con el sello rojo de
+*sin confirmar* y el motivo impreso al lado. El agente declara su propia certeza
+en `confianza_declarada` y se le instruye explícitamente a NO autocensurarse: un
+hallazgo débil y marcado le da al cronista una pista que perseguir en el archivo
+físico, y el silencio no.
+
+Se aceptan también **fuentes impresas sin digitalizar** (`fuente_impresa`): una
+referencia bibliográfica o un fondo de archivo localizado pero no consultable en
+línea entra a la hoja, siempre marcada sin confirmar y con la referencia visible,
+para que alguien pueda ir a verificarla al papel.
+
+**Lo único que no se flexibiliza en lo local: no estirar lo nacional para que
+parezca morelense.** Ya ocurrió una vez —el agente presentó el Bando del
+Aguacatillo como consecuencia de la ejecución de Hidalgo, moviéndolo nueve meses
+de su fecha, para poder conectarlo con Morelos—. Publicar sin verificar es una
+cosa y el lector lo ve etiquetado; etiquetar como Morelos un hecho que no lo es,
+otra, porque ninguna etiqueta lo corrige: el dato entra al calendario local
+siendo nacional. Si el vínculo con Morelos es inferido y no documentado, el
+agente debe decirlo dentro del texto.
+
+Si la primera pasada local vuelve vacía, corre `investigarLocalAmplio`: mismo
+mes, cualquier año, cualquiera de los 36 municipios, precisión mensual. Vale la
+llamada extra porque lo local es lo único que este portal no puede conseguir en
+otro lado.
 
 Y hay un techo que ningún cambio de código rompe: lo verdaderamente local —el
 acta de cabildo, el oficio del último talabartero, por qué al barrio le dicen

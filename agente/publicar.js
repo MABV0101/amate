@@ -147,21 +147,76 @@ hospitales, nacimientos y muertes de morelenses notables, hallazgos
 arqueológicos, temblores y desastres, fundación de instituciones.
 
 Reglas:
-1. Sólo hechos CONFIRMADOS en una página que consultaste en esta sesión.
-   Nada de memoria. Lo que no encontraste buscando, no existe.
-2. Cada hecho lleva la URL exacta donde lo verificaste.
-3. Campo "precision": "dia" si la fuente da día y mes exactos; "mes" si sólo
+1. Devuelve lo que encuentres AUNQUE NO LO PUEDAS CONFIRMAR DEL TODO. Este
+   portal publica los hallazgos dudosos con etiqueta visible de "sin confirmar"
+   y con el motivo impreso al lado. No te autocensures: un hallazgo débil y
+   marcado vale más que el silencio, porque le da al cronista una pista que
+   perseguir en el archivo físico.
+2. Declara tú mismo tu grado de certeza en "confianza_declarada": "alta" si lo
+   confirmaste en una fuente sólida, "media" si la fuente es endeble o
+   indirecta, "baja" si es una mención suelta que no pudiste corroborar. Sé
+   sincero: lo que marques bajo se publicará marcado, no se descartará.
+3. Cada hecho lleva su fuente. Si es una página, la URL exacta en "fuente". Si
+   es una obra impresa o un fondo de archivo que localizaste referido pero no
+   digitalizado, ponlo en "fuente_impresa" con autor, obra y año, y deja
+   "fuente" vacío. Ambas formas se aceptan.
+4. Campo "precision": "dia" si la fuente da día y mes exactos; "mes" si sólo
    consta el mes y el año. Nunca inventes un día para que cuadre.
-4. Nada posterior a ${ANIO_LIMITE}. Nada de personas probablemente vivas.
-5. Si de plano no encuentras nada morelense confirmado, devuelve la lista
-   vacía. No rellenes con historia nacional.
-6. Máximo tres hechos. Texto sobrio, dos o tres oraciones.
+5. Nada posterior a ${ANIO_LIMITE}. Nada de personas probablemente vivas.
+6. Hasta cinco hechos. Texto sobrio, dos o tres oraciones.
+
+REGLA QUE NO SE FLEXIBILIZA — no estires lo nacional para que parezca local.
+Ya ocurrió: el agente presentó el Bando del Aguacatillo como consecuencia de la
+ejecución de Hidalgo para conectarlo con Morelos, moviéndolo nueve meses de su
+fecha real. Publicar sin verificar es una cosa; etiquetar como Morelos un hecho
+que no lo es, otra. Si el vínculo con Morelos es inferido y no documentado,
+DILO dentro del propio texto y marca "confianza_declarada": "baja". Si el hecho
+simplemente no es morelense, no lo incluyas: para eso está la otra pasada.
 
 ${previo ? `Ya está publicado esto; propón sólo hechos DISTINTOS:\n${previo}` : ''}
 
 Responde SÓLO JSON:
 {"capas":[{"ambito":"Cuautla|Morelos","anio":"1914","precision":"dia|mes",
-"texto":"...","fuente":"https://...","cita":"la frase que lo respalda"}]}`,
+"texto":"...","fuente":"https://... o vacío","fuente_impresa":"Autor, Obra, año, o vacío",
+"confianza_declarada":"alta|media|baja","cita":"la frase que lo respalda"}]}`,
+    { buscar: true }, 'capas');
+}
+
+
+/* Si la primera pasada local vuelve vacía, se insiste con el cerco más
+   abierto: cualquier año, cualquiera de los 36 municipios, precisión de
+   mes. Vale la llamada extra: lo local es lo único que este portal no
+   puede conseguir en otro lado. */
+async function investigarLocalAmplio(dia, mesTexto) {
+  const a = anclas(dia);
+  return preguntarConReintento(`Eres investigador del archivo histórico de
+Morelos, México. La primera búsqueda no arrojó nada para este día. Abre el
+cerco.
+
+Busca CUALQUIER hecho documentado ocurrido en ${mesTexto} de cualquier año
+anterior a ${ANIO_LIMITE}, en cualquier municipio de Morelos. No necesitas día
+exacto: la precisión de mes se acepta y se marca como tal.
+
+Entra por aquí y haz varias búsquedas distintas:
+- Municipios: ${a.municipios.join(', ')}
+- Haciendas: ${a.haciendas.join(', ')}
+- Figuras: ${a.figuras.join(', ')}
+- Episodios: ${a.episodios.join(', ')}
+
+Sirve prácticamente cualquier cosa fechable: decretos del estado, fundaciones,
+combates, dotaciones ejidales, inauguraciones de obras, nacimientos y muertes
+de morelenses, hallazgos arqueológicos, temblores, fundación de instituciones,
+huelgas, ferias patronales con origen documentado.
+
+Devuelve lo que encuentres aunque sea endeble: se publica con etiqueta visible
+de "sin confirmar" y con el motivo al lado. Declara tu certeza real en
+"confianza_declarada". No inventes y no estires lo nacional para que parezca
+morelense: si el hecho no es de Morelos, no lo incluyas.
+
+Hasta cuatro hechos. Responde SÓLO JSON, mismo formato:
+{"capas":[{"ambito":"Cuautla|Morelos","anio":"1914","precision":"dia|mes",
+"texto":"...","fuente":"https://... o vacío","fuente_impresa":"Autor, Obra, año, o vacío",
+"confianza_declarada":"alta|media|baja","cita":"..."}]}`,
     { buscar: true }, 'capas');
 }
 
@@ -245,7 +300,17 @@ async function principal() {
     locales = (r.capas || []).filter(c => ['Cuautla', 'Morelos'].includes(c.ambito));
     log(`Pasada local: ${locales.length} candidatas de Morelos.`);
   } catch (e) {
-    log(`Pasada local falló (${e.message}). Se continúa con la general.`);
+    log(`Pasada local falló (${e.message}). Se intentará la amplia.`);
+  }
+
+  if (!locales.length) {
+    try {
+      const r2 = await investigarLocalAmplio(dia, mesTexto);
+      locales = (r2.capas || []).filter(c => ['Cuautla', 'Morelos'].includes(c.ambito));
+      log(`Pasada local amplia: ${locales.length} candidatas de Morelos.`);
+    } catch (e) {
+      log(`Pasada local amplia falló (${e.message}).`);
+    }
   }
 
   const g = await investigar(dia, fechaTexto, resumenPrevio);
@@ -271,8 +336,28 @@ async function principal() {
       log(`  ✗ ámbito no válido: ${capa.ambito}.`);
       continue;
     }
-    if (!/^https?:\/\//.test(capa.fuente || '')) {
-      log(`  ✗ ${capa.ambito} ${capa.anio}: sin URL de fuente.`);
+    const tieneURL = /^https?:\/\//.test(capa.fuente || '');
+    const tieneImpresa = typeof capa.fuente_impresa === 'string' &&
+                         capa.fuente_impresa.trim().length > 10;
+    if (!tieneURL && !tieneImpresa) {
+      log(`  ✗ ${capa.ambito} ${capa.anio}: sin fuente de ningún tipo.`);
+      continue;
+    }
+    // Una referencia impresa no se puede corroborar en línea, así que nunca
+    // llega a confianza alta: entra marcada sin confirmar, con la cita al pie.
+    if (!tieneURL) {
+      log(`  ⚠ ${capa.ambito} ${capa.anio}: fuente impresa, publicada SIN CONFIRMAR.`);
+      aprobadas.push({
+        ambito: capa.ambito, anio: String(capa.anio),
+        texto: capa.texto, fuente: '',
+        fuente_impresa: capa.fuente_impresa.trim(),
+        verificacion: 'automatica',
+        precision: capa.precision === 'mes' ? 'mes' : 'dia',
+        confianza: 'sin_confirmar',
+        motivo: `Fuente impresa no digitalizada: ${recorta(capa.fuente_impresa, 200)}. ` +
+                `No se pudo corroborar en línea; hay que consultarla físicamente.`,
+        publicada: new Date().toISOString().slice(0, 10),
+      });
       continue;
     }
 

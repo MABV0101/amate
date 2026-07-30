@@ -285,7 +285,9 @@ function hojaEfemeride(ef, { enlace = true } = {}) {
     if (modo === 'humana') {
       sello = '<span class="sello sello--humana" title="Comprobada por un cronista contra la fuente original.">Verificada por cronista</span>';
     } else if (capa.confianza === 'sin_confirmar') {
-      sello = `<span class="sello sello--sinconfirmar">Sin confirmar</span>${enlaceFuente ? `<span class="sello-fuente">${enlaceFuente.replace(' · ', '')}</span>` : ''}`;
+      const impresa = capa.fuente_impresa
+        ? `<span class="sello-fuente">Fuente impresa: ${esc(capa.fuente_impresa)}</span>` : '';
+      sello = `<span class="sello sello--sinconfirmar">Sin confirmar</span>${enlaceFuente ? `<span class="sello-fuente">${enlaceFuente.replace(' · ', '')}</span>` : ''}${impresa}`;
     } else if (capa.confianza === 'media') {
       sello = `<span class="sello sello--media" title="El verificador encontró un error en el dato original y lo corrigió contra una fuente independiente. Todavía no la revisa una persona.">Confianza media · dato corregido${enlaceFuente}</span>`;
     } else {
