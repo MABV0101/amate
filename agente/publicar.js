@@ -10,6 +10,7 @@
 const fs = require('fs');
 const path = require('path');
 const { leerFrontMatter, escribirFrontMatter } = require('../lib/frontmatter');
+const { REPOSITORIOS, anclas } = require('./morelos');
 
 const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio',
   'agosto','septiembre','octubre','noviembre','diciembre'];
@@ -96,12 +97,66 @@ Responde SÓLO JSON:
 "cita":"la frase de la fuente que respalda el hecho"}]}`, { buscar: true });
 }
 
+
+/* ---- pasada 0: búsqueda local dedicada ------------------------- */
+/* Corre ANTES de la general y con varias consultas distintas. Una
+   búsqueda genérica de "29 de julio Morelos" no devuelve nada; entrar
+   por hacienda, municipio o figura sí. Acepta precisión de mes, porque
+   de la historia de Morelos se conoce mucho más al mes que al día. */
+
+async function investigarLocal(dia, fechaTexto, mesTexto, previo) {
+  const a = anclas(dia);
+  return preguntar(`Eres investigador del archivo histórico de Morelos, México.
+Tu ÚNICA tarea en esta pasada es encontrar hechos de MORELOS o de sus
+municipios. Nada de historia nacional ni mundial: eso lo cubre otra pasada.
+
+Busca hechos ocurridos un ${fechaTexto}, o bien durante ${mesTexto}, de
+cualquier año anterior a ${ANIO_LIMITE}.
+
+HAZ VARIAS BÚSQUEDAS DISTINTAS, no una sola. Una consulta genérica del tipo
+"${fechaTexto} Morelos" no devuelve nada útil. Entra por estos caminos y
+combínalos con el mes y con años concretos:
+
+- Municipios: ${a.municipios.join(', ')}
+- Haciendas azucareras: ${a.haciendas.join(', ')}
+- Figuras: ${a.figuras.join(', ')}
+- Episodios: ${a.episodios.join(', ')}
+
+Prioriza estos repositorios, que sí tienen material morelense digitalizado:
+${REPOSITORIOS.map(r => '  · ' + r).join('\n')}
+
+Tipos de hecho que suelen estar documentados y sirven:
+decretos y leyes del estado, fundación o erección de municipios, tomas y
+combates del Ejército Libertador del Sur, reparto de tierras y dotaciones
+ejidales, inauguraciones de ingenios, ferrocarriles, mercados, escuelas y
+hospitales, nacimientos y muertes de morelenses notables, hallazgos
+arqueológicos, temblores y desastres, fundación de instituciones.
+
+Reglas:
+1. Sólo hechos CONFIRMADOS en una página que consultaste en esta sesión.
+   Nada de memoria. Lo que no encontraste buscando, no existe.
+2. Cada hecho lleva la URL exacta donde lo verificaste.
+3. Campo "precision": "dia" si la fuente da día y mes exactos; "mes" si sólo
+   consta el mes y el año. Nunca inventes un día para que cuadre.
+4. Nada posterior a ${ANIO_LIMITE}. Nada de personas probablemente vivas.
+5. Si de plano no encuentras nada morelense confirmado, devuelve la lista
+   vacía. No rellenes con historia nacional.
+6. Máximo tres hechos. Texto sobrio, dos o tres oraciones.
+
+${previo ? `Ya está publicado esto; propón sólo hechos DISTINTOS:\n${previo}` : ''}
+
+Responde SÓLO JSON:
+{"capas":[{"ambito":"Cuautla|Morelos","anio":"1914","precision":"dia|mes",
+"texto":"...","fuente":"https://...","cita":"la frase que lo respalda"}]}`,
+    { buscar: true });
+}
+
 /* ---- pasada 2: verificación adversarial ------------------------ */
 /* Llamada independiente, sin el razonamiento de la primera. Su trabajo
    no es confirmar sino tumbar. Se le pide explícitamente que asuma que
    la afirmación es falsa hasta que la fuente demuestre lo contrario. */
 
-async function verificar(capa, fechaTexto) {
+async function verificar(capa, fechaTexto, mesTexto) {
   return preguntar(`Eres verificador de datos de un archivo histórico. Tu trabajo
 es DESMENTIR, no confirmar. Asume que la siguiente afirmación es falsa hasta que
 la fuente demuestre lo contrario.
@@ -115,8 +170,12 @@ Busca de forma independiente y comprueba:
 
 1. ¿La fuente existe y es accesible?
 2. ¿Dice efectivamente eso, o se le atribuye algo que no dice?
-3. ¿La FECHA EXACTA (día y mes) coincide? Este es el error más frecuente:
-   un hecho real fechado en el día equivocado. Sé implacable aquí.
+3. ${capa.precision === 'mes'
+     ? `La afirmación se presenta con precisión de MES (${mesTexto}), no de día.
+   ¿El mes y el año coinciden con la fuente? No exijas día exacto, pero sí
+   comprueba que la fuente no dé otro mes.`
+     : `¿La FECHA EXACTA (día y mes) coincide? Este es el error más frecuente:
+   un hecho real fechado en el día equivocado. Sé implacable aquí.`}
 4. ¿El año coincide?
 5. ¿Alguna fuente independiente lo contradice o da otra fecha?
 6. ¿Hay personas identificables probablemente vivas, o hechos posteriores
@@ -152,6 +211,7 @@ async function principal() {
   const dia = diaObjetivo();
   const [mes, num] = dia.split('-');
   const fechaTexto = `${Number(num)} de ${MESES[Number(mes) - 1]}`;
+  const mesTexto = MESES[Number(mes) - 1];
   const ruta = path.join(raiz, 'contenido', 'efemerides', `${dia}.md`);
 
   let previo = { datos: {}, cuerpo: '' };
@@ -160,8 +220,23 @@ async function principal() {
 
   log(`Día ${dia}. Capas ya publicadas: ${capasPrevias.length}.`);
 
-  const { capas } = await investigar(dia, fechaTexto,
-    capasPrevias.map(c => `${c.ambito} ${c.anio}: ${c.texto}`).join('\n'));
+  const resumenPrevio = capasPrevias
+    .map(c => `${c.ambito} ${c.anio}: ${c.texto}`).join('\n');
+
+  // Primero lo local. Es lo que le da valor al portal y lo más difícil
+  // de encontrar, así que se busca con su propia estrategia.
+  let locales = [];
+  try {
+    const r = await investigarLocal(dia, fechaTexto, mesTexto, resumenPrevio);
+    locales = (r.capas || []).filter(c => ['Cuautla', 'Morelos'].includes(c.ambito));
+    log(`Pasada local: ${locales.length} candidatas de Morelos.`);
+  } catch (e) {
+    log(`Pasada local falló (${e.message}). Se continúa con la general.`);
+  }
+
+  const g = await investigar(dia, fechaTexto, resumenPrevio);
+  const generales = (g.capas || []).filter(c => !['Cuautla', 'Morelos'].includes(c.ambito));
+  const capas = [...locales, ...generales];
 
   if (!capas || !capas.length) {
     log('La investigación no arrojó nada. No se publica.');
@@ -188,7 +263,7 @@ async function principal() {
     }
 
     let v;
-    try { v = await verificar(capa, fechaTexto); }
+    try { v = await verificar(capa, fechaTexto, mesTexto); }
     catch (e) { log(`  ✗ ${capa.ambito} ${capa.anio}: falló la verificación (${e.message}).`); continue; }
 
     // Toda publicación exige corroboración independiente y ausencia de riesgo.
@@ -223,6 +298,7 @@ async function principal() {
         texto: capa.texto,
         fuente: capa.fuente || '',
         verificacion: 'automatica',
+        precision: capa.precision === 'mes' ? 'mes' : 'dia',
         confianza: 'sin_confirmar',
         motivo: recorta(v.motivo, 400),
         publicada: new Date().toISOString().slice(0, 10),
@@ -247,6 +323,7 @@ async function principal() {
       fuente: capa.fuente,
       corrobora: v.corroboracion_independiente,
       verificacion: 'automatica',
+      precision: capa.precision === 'mes' ? 'mes' : 'dia',
       confianza: media ? 'media' : 'alta',
       publicada: new Date().toISOString().slice(0, 10),
     });

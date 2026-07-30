@@ -1,0 +1,87 @@
+name: Pieza semanal de Morelos
+
+# Una pieza por semana, no por día. Una diaria sería relleno, y el relleno
+# es lo que quita credibilidad a un archivo.
+#
+# Lunes a las 10:00 UTC = 4:00 a.m. en Morelos.
+
+on:
+  schedule:
+    - cron: '0 10 * * 1'
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: 'Tipo de pieza'
+        required: false
+        default: 'acervo'
+        type: choice
+        options:
+          - acervo
+          - nota
+          - cronica
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: piezas-semanales
+
+jobs:
+  redactar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Investigar, verificar y redactar
+        id: agente
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MODO_PIEZA: ${{ inputs.modo }}
+        run: node agente/piezas.js
+
+      - name: Comprobar que el sitio sigue compilando
+        run: node build.js
+
+      - name: Guardar en el archivo
+        if: steps.agente.outputs.publicadas != '0'
+        run: |
+          git config user.name  'Agente de Amate'
+          git config user.email 'agente@amate.local'
+          git add contenido/cronicas/
+          git commit -m "Pieza automática (${{ steps.agente.outputs.modo }}): ${{ steps.agente.outputs.nombre }}" || exit 0
+          git pull --rebase --autostash
+          git push
+
+      - name: Abrir pendiente de auditoría
+        if: steps.agente.outputs.publicadas != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const r = JSON.parse(fs.readFileSync('resumen-piezas.json', 'utf8'));
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Auditar pieza automática: ${r.nombre}`,
+              labels: ['auditoría', 'pieza-automática'],
+              body: [
+                `Modo: **${r.modo}**. Ya está publicada; esto es revisión posterior.`,
+                ``,
+                `- [ ] Abrir cada fuente del pie y comprobar que dice lo que se le atribuye.`,
+                `- [ ] Verificar todas las fechas y cifras.`,
+                `- [ ] Confirmar que no hay escenas ni motivaciones inventadas.`,
+                `- [ ] Reescribir con voz propia si va a quedarse.`,
+                ``,
+                `Al validarla, quita \`verificacion: automatica\` del archivo y el`,
+                `aviso desaparece solo. Si no resiste, bórrala y anota por qué.`,
+                ``,
+                '```',
+                r.registro.join('\n'),
+                '```'
+              ].join('\n')
+            });

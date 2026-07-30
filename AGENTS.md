@@ -188,6 +188,74 @@ archivista; la serif es la voz del narrador. Respeta esa separación.
 
 ---
 
+## Cobertura local: el problema central del proyecto
+
+El agente encuentra fácilmente historia mundial y nacional, y casi nada de
+Morelos. No es un defecto del filtro: **la historia municipal de Morelos no
+está digitalizada**, y una búsqueda web sólo devuelve lo indexado.
+
+Tres mecanismos intentan compensarlo. Si los tocas, no los debilites:
+
+1. **Pasada local dedicada** (`investigarLocal` en `agente/publicar.js`). Corre
+   ANTES de la general y sólo admite ámbitos Cuautla y Morelos. Se le exige
+   hacer varias búsquedas distintas, porque una consulta genérica no devuelve
+   nada.
+
+2. **Anclas rotativas** (`agente/morelos.js`). Listas de municipios, haciendas
+   azucareras, figuras y episodios que se rotan por día del año, para que el
+   agente entre por caminos distintos cada madrugada. **Ampliar estas listas es
+   la mejora más rentable del proyecto**: cada ancla nueva sube la cobertura
+   local. Ahí también está la lista de repositorios que sí tienen material
+   morelense en línea.
+
+3. **Precisión de mes** (`precision: "mes"`). De la historia de Morelos se
+   documenta mucho más al mes que al día exacto. Una capa con precisión mensual
+   entra a la hoja marcada como *sólo mes*, con nota al pie. Nunca inventes un
+   día para que un hecho mensual parezca diario.
+
+Lo que **no** se debe hacer para mejorar la cobertura local: bajar el requisito
+de corroboración independiente para los hechos de Morelos. Son precisamente los
+que nadie va a poder desmentir y los que más se van a citar. Relajar el filtro
+ahí contamina el registro que el proyecto existe para salvar.
+
+Y hay un techo que ningún cambio de código rompe: lo verdaderamente local —el
+acta de cabildo, el oficio del último talabartero, por qué al barrio le dicen
+como le dicen— no está en la web. Sale del archivo municipal, la hemeroteca y
+la memoria de la gente. El agente sirve para que ningún día amanezca vacío; el
+valor del portal lo ponen los cronistas.
+
+## Piezas largas: qué puede y qué no puede la máquina
+
+`agente/piezas.js` produce piezas largas sobre Morelos, **una por semana**, no
+por día. Una diaria sería relleno, y el relleno es lo que le quita credibilidad
+a un archivo.
+
+Tiene tres modos, y la distinción es deliberada:
+
+- **`acervo`** (por omisión) — ficha documental de una fuente digitalizada: qué
+  es, de cuándo, dónde está, qué dice y **qué no se puede saber a partir de
+  ella**. Ese último párrafo es obligatorio. Es trabajo mecánico y verificable:
+  una máquina lo hace bien.
+
+- **`nota`** — nota de investigación dirigida a los cronistas: qué material
+  existe, dónde está, qué preguntas quedan abiertas y qué haría falta para
+  escribir la crónica. Convierte al agente en documentalista en vez de
+  redactor. Es el modo más útil y el más subestimado.
+
+- **`cronica`** — **viene apagado a propósito.** Una crónica exige conocimiento
+  local que no está en la web: cómo era el mercado, quién tenía el taller de la
+  esquina, por qué el barrio se llama así. Sin eso, una máquina produce un
+  resumen enciclopédico con adjetivos. Veinte piezas huecas firmadas por el
+  portal y el lector deja de creerle a las buenas. Si se enciende, cada pieza se
+  revisa antes de salir y no se deja correr sola.
+
+Controles que no se deben debilitar: mínimo de dos fuentes distintas y
+accesibles, verificación adversarial de cada afirmación clave, rechazo
+automático si hay invención narrativa, y falla cerrada. Las piezas automáticas
+llevan `verificacion: automatica`, lo que dispara un aviso visible en la página
+y una etiqueta en la tarjeta. Cuando una persona la valida, se quita ese campo
+y el aviso desaparece solo.
+
 ## Sobre los agentes automáticos
 
 `agente/publicar.js` publica sin revisión humana. Su seguridad depende de

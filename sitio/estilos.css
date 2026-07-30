@@ -459,3 +459,16 @@ h2 { font-family: var(--display); font-weight: 600; letter-spacing: -.015em; lin
   color: var(--cochinilla); margin-bottom: .3rem;
 }
 .aviso-verificacion--fuerte { border-left-color: var(--cochinilla); }
+
+/* ---------- precisión mensual ------------------------------------ */
+
+.capa-precision {
+  display: block; font-family: var(--util); font-size: .6rem;
+  letter-spacing: .12em; text-transform: uppercase;
+  color: var(--corteza-sua); font-weight: 400; margin-top: .2rem;
+}
+.nota-precision {
+  margin: 1.2rem 0 0; padding: .7rem .9rem;
+  border-left: 3px solid var(--cana); background: var(--amate);
+  font-size: .85rem; color: var(--corteza-sua); max-width: 48rem;
+}

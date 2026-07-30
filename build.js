@@ -42,6 +42,7 @@ const SECCIONES = {
   acervo:    { nombre: 'Acervo',     color: 'cana' },
   toponimia: { nombre: 'Toponimia',  color: 'cana' },
   obituario: { nombre: 'Obituario',  color: 'cochinilla' },
+  nota:      { nombre: 'Nota de investigación', color: 'anil' },
 };
 
 /* ---------- utilidades ---------------------------------------- */
@@ -261,7 +262,9 @@ function tarjetaCronica(c) {
   return `<article class="tarjeta">
   <div class="tarjeta-meta">
     <span class="etiqueta etiqueta--${sec.color}">${esc(sec.nombre)}</span>
-    <span class="folio">${esc(folio(c))}</span>
+    ${c.verificacion === 'automatica'
+      ? '<span class="sello sello--maquina" title="Producida por un agente. Aún no la revisa una persona.">Automática</span>'
+      : `<span class="folio">${esc(folio(c))}</span>`}
   </div>
   <h3 class="tarjeta-titulo"><a href="/cronicas/${esc(c.nombre)}/">${esc(c.titulo)}</a></h3>
   <p class="tarjeta-resumen">${esc(c.resumen || '')}</p>
@@ -291,7 +294,7 @@ function hojaEfemeride(ef, { enlace = true } = {}) {
     return `
     <li class="capa capa--${slug(capa.ambito)}">
       <span class="capa-ambito">${esc(capa.ambito)}</span>
-      <span class="capa-anio">${esc(capa.anio)}</span>
+      <span class="capa-anio">${esc(capa.anio)}${capa.precision === 'mes' ? '<span class="capa-precision">sólo mes</span>' : ''}</span>
       <div class="capa-texto${capa.confianza === 'sin_confirmar' ? ' capa-texto--dudosa' : ''}">
         <p>${enLinea(capa.texto || '')}</p>
         ${sello}
@@ -323,6 +326,11 @@ function hojaEfemeride(ef, { enlace = true } = {}) {
     fuente y corroboró con una segunda independiente, pero todavía no la ha leído
     una persona. Las capas con sello punteado están pendientes de auditoría; las
     de sello continuo ya las comprobó un cronista.</p>` : ''}
+    ${(ef.capas || []).some(c => c.precision === 'mes') ? `
+    <p class="nota-precision">Las capas marcadas <strong>sólo mes</strong>
+    ocurrieron en este mes del año indicado, pero la fuente no consigna el día
+    exacto. Se incluyen porque de la historia de Morelos se documenta mucho más
+    al mes que al día, y descartarlas dejaría el calendario local vacío.</p>` : ''}
     <p class="hoja-pie">
       <span class="folio">Actualizado ${esc(fechaLarga(ef.actualizado))}</span>
       ${enlace ? ` · <a href="/efemerides/${esc(ef.nombre)}/">Ver la hoja completa</a>` : ''}
@@ -537,6 +545,15 @@ function construirCronicas() {
       · <time datetime="${esc(c.fecha)}">${esc(fechaLarga(c.fecha))}</time>
     </p>
   </header>
+  ${c.verificacion === 'automatica' ? `
+  <div class="marco columna">
+    <p class="aviso-verificacion aviso-verificacion--fuerte"><strong>Pieza
+    producida automáticamente.</strong> La redactó un agente a partir de fuentes
+    digitalizadas y pasó una verificación adversarial de sus afirmaciones, pero
+    <strong>todavía no la ha leído una persona</strong>. Las fuentes van al pie:
+    revísalas antes de citar. Si encuentras un error, escríbenos y la corrección
+    se publica al pie sin borrar lo corregido.</p>
+  </div>` : ''}
   <div class="pieza-cuerpo marco columna">${markdown(c.cuerpo)}</div>
   ${c.fuentes && c.fuentes.length ? `
   <section class="fuentes marco columna">
