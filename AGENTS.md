@@ -188,6 +188,59 @@ archivista; la serif es la voz del narrador. Respeta esa separación.
 
 ---
 
+## Fotografías
+
+Nunca se pinta una imagen sin su ficha. En un archivo la procedencia pesa tanto
+como la fotografía: sin autor y licencia declarados, una imagen es un problema
+legal esperando turno. El componente `figura()` en `build.js` siempre imprime
+autor, fecha, procedencia y licencia debajo.
+
+Dos orígenes:
+
+- **`origen: "commons"`** — el motor de Wikidata trae la imagen de la propiedad
+  P18 y consulta la API de Commons para obtener autor y licencia. **Si Commons
+  no declara licencia, la imagen se descarta.** Se sirve por
+  `Special:FilePath/ARCHIVO?width=N`, que es la dirección estable y pasa por la
+  CDN de Wikimedia.
+- **`origen: "local"`** — fotografías subidas desde el escritorio del cronista,
+  que van a `sitio/acervo/`. El formulario pide pie, autor, fecha aproximada,
+  procedencia y con qué permiso se publica. Ese último campo es el que protege
+  al portal el día que alguien reclame.
+
+**Nota sobre el formato:** las capas de efeméride guardan la imagen en claves
+planas (`imagen_archivo`, `imagen_autor`, `imagen_licencia`…) porque el
+front-matter admite un solo nivel de anidamiento y las capas ya son una lista.
+Las piezas sí la guardan como objeto `imagen:`. La función `imagenDe()`
+reconstruye ambos casos. Si extiendes esto, extiende también
+`lib/frontmatter.js`, que es quien pone el límite.
+
+## Vista previa al compartir un enlace
+
+Cuando alguien pega un enlace del portal en WhatsApp, Telegram o Facebook, la
+tarjeta con imagen y título sale de las etiquetas Open Graph en `pagina()` de
+`build.js`, más el archivo `sitio/amate-og.png` (1200×630, unos 155 KB).
+
+Dos cosas que no son obvias:
+
+- **La URL de la imagen debe ser absoluta.** Una ruta relativa no funciona: los
+  previsualizadores no resuelven rutas relativas. Por eso se arma con
+  `SITIO.url`, y por eso hay que actualizar esa constante al cambiar de dominio
+  o las vistas previas apuntarán a un sitio ajeno.
+- **Los previsualizadores respetan `robots.txt`.** Con el sitio en modo
+  provisional y `Disallow: /` para todos, WhatsApp no iba a buscar nada y el
+  enlace salía pelón. Ahora se les da paso explícito por nombre —
+  `facebookexternalhit`, `WhatsApp`, `Twitterbot` y demás — manteniendo
+  bloqueados a los buscadores. **Previsualizar no es indexar**, y son cosas que
+  conviene decidir por separado.
+
+WhatsApp guarda la vista previa en caché por bastante tiempo. Si cambias la
+imagen y quieres verla, prueba con un enlace distinto o agrega `?v=2` al final.
+Para forzar el refresco en Facebook y WhatsApp está el depurador de Open Graph
+de Meta (`developers.facebook.com/tools/debug/`).
+
+Peso máximo recomendado de la imagen: por debajo de 300 KB. Más pesada y
+algunos clientes dejan de mostrarla.
+
 ## Motor del calendario: Wikidata, no un modelo
 
 `agente/wikidata.js` es el **motor principal** de las efemérides. Consulta

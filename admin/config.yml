@@ -69,6 +69,27 @@ collections:
       - { name: 'lugar', label: 'Lugar', widget: 'string', required: false }
       - { name: 'resumen', label: 'Resumen', widget: 'text', hint: 'Dos líneas. Es lo que se ve en la portada y en el buscador.' }
       - { name: 'fuentes', label: 'Fuentes', widget: 'list', required: false, field: { name: 'fuente', label: 'Referencia', widget: 'string' } }
+      - name: 'imagen'
+        label: 'Fotografía o documento'
+        widget: 'object'
+        required: false
+        collapsed: true
+        hint: 'Sin autor y licencia declarados la imagen no se publica. En un archivo, la ficha pesa tanto como la foto.'
+        fields:
+          - { name: 'archivo', label: 'Archivo', widget: 'image', required: false }
+          - { name: 'pie', label: 'Pie de foto', widget: 'string', required: false, hint: 'Qué se ve. Nombres de las personas si se conocen.' }
+          - { name: 'autor', label: 'Quién la tomó', widget: 'string', required: false, default: 'Autor no identificado' }
+          - { name: 'fecha', label: 'Fecha aproximada', widget: 'string', required: false, hint: 'Basta "hacia 1950" si no se sabe exacta.' }
+          - { name: 'procedencia', label: 'De dónde salió', widget: 'string', required: false, hint: 'Ej.: Acervo familiar de la señora N., barrio de Santo Domingo, Cuautla.' }
+          - name: 'licencia'
+            label: 'Con qué permiso se publica'
+            widget: 'select'
+            required: false
+            options:
+              - { label: 'Cedida por quien la aportó, con autorización por escrito', value: 'Cedida por quien la aportó' }
+              - { label: 'Dominio público por antigüedad', value: 'Dominio público' }
+              - { label: 'Creative Commons BY-SA', value: 'CC BY-SA' }
+              - { label: 'Acervo institucional, con permiso', value: 'Acervo institucional, con permiso' }
       - { name: 'borrador', label: 'Mantener sin publicar', widget: 'boolean', default: false, required: false }
       - { name: 'body', label: 'Texto', widget: 'markdown' }
 

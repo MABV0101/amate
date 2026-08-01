@@ -193,6 +193,17 @@ function pagina({ titulo, descripcion, cuerpo, clase = '', canonica = '' }) {
 <meta property="og:description" content="${esc(descripcion || SITIO.descripcion)}">
 <meta property="og:type" content="article">
 <meta property="og:locale" content="es_MX">
+<meta property="og:site_name" content="${esc(SITIO.nombre)}">
+<meta property="og:url" content="${SITIO.url}${canonica || '/'}">
+<meta property="og:image" content="${SITIO.url}/amate-og.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Amate. Crónicas de Morelos.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${esc(t)}">
+<meta name="twitter:description" content="${esc(descripcion || SITIO.descripcion)}">
+<meta name="twitter:image" content="${SITIO.url}/amate-og.png">
 ${SITIO.provisional
   ? '<meta name="robots" content="noindex, nofollow">'
   : (canonica ? `<link rel="canonical" href="${SITIO.url}${canonica}">` : '')}
@@ -254,12 +265,67 @@ ${cuerpo}
 </html>`;
 }
 
+
+/* ---------- imágenes con procedencia -------------------------------
+   En un archivo, la ficha de la imagen pesa tanto como la imagen: sin
+   autor y licencia declarados, una fotografía es un problema legal
+   esperando turno. Por eso nunca se pinta una imagen sin su pie.
+   -------------------------------------------------------------------- */
+
+function urlCommons(archivo, ancho = 900) {
+  const limpio = String(archivo).replace(/^File:/i, '').replace(/ /g, '_');
+  return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(limpio)}?width=${ancho}`;
+}
+
+/* Las capas guardan la imagen en claves planas (imagen_archivo, imagen_autor…)
+   porque el front-matter admite un solo nivel de anidamiento y las capas ya
+   son una lista. Las piezas sí la guardan como objeto. */
+function imagenDe(o) {
+  if (!o) return null;
+  if (o.imagen && typeof o.imagen === 'object' && o.imagen.archivo) return o.imagen;
+  if (!o.imagen_archivo) return null;
+  return {
+    archivo: o.imagen_archivo,
+    origen: o.imagen_origen || 'local',
+    autor: o.imagen_autor,
+    fecha: o.imagen_fecha,
+    procedencia: o.imagen_procedencia,
+    licencia: o.imagen_licencia,
+    pie: o.imagen_pie,
+  };
+}
+
+function figura(img, { ancho = 900, clase = '' } = {}) {
+  if (!img || !img.archivo) return '';
+  const esCommons = img.origen === 'commons';
+  const src = esCommons ? urlCommons(img.archivo, ancho) : esc(img.archivo);
+  const ficha = [
+    img.autor ? esc(img.autor) : '',
+    img.fecha ? esc(img.fecha) : '',
+    img.procedencia ? esc(img.procedencia) : '',
+    img.licencia ? esc(img.licencia) : '',
+  ].filter(Boolean).join(' · ');
+
+  return `<figure class="figura ${clase}">
+  <img src="${src}" alt="${esc(img.pie || img.archivo)}" loading="lazy" decoding="async">
+  ${img.pie ? `<figcaption class="figura-pie">${enLinea(img.pie)}</figcaption>` : ''}
+  ${ficha ? `<p class="figura-ficha">${ficha}${esCommons
+      ? ` · <a href="https://commons.wikimedia.org/wiki/File:${encodeURIComponent(String(img.archivo).replace(/^File:/i,''))}">Wikimedia Commons</a>` : ''}</p>` : ''}
+</figure>`;
+}
+
 /* ---------- componentes ---------------------------------------- */
 
 function tarjetaCronica(c) {
   const sec = SECCIONES[c.seccion] || SECCIONES.cronica;
   const autor = autorPorSlug[c.autor];
-  return `<article class="tarjeta">
+  const im = imagenDe(c);
+  const mini = im
+    ? `<a class="tarjeta-mini" href="/cronicas/${esc(c.nombre)}/"><img src="${
+        im.origen === 'commons' ? urlCommons(im.archivo, 500) : esc(im.archivo)
+      }" alt="" loading="lazy"></a>` : '';
+  return `<article class="tarjeta${mini ? ' tarjeta--con-imagen' : ''}">
+  ${mini}
   <div class="tarjeta-meta">
     <span class="etiqueta etiqueta--${sec.color}">${esc(sec.nombre)}</span>
     ${c.verificacion === 'automatica'
@@ -301,6 +367,7 @@ function hojaEfemeride(ef, { enlace = true } = {}) {
       <span class="capa-anio">${esc(capa.anio)}${capa.precision === 'mes' ? '<span class="capa-precision">sólo mes</span>' : ''}</span>
       <div class="capa-texto${capa.confianza === 'sin_confirmar' ? ' capa-texto--dudosa' : ''}">
         <p>${enLinea(capa.texto || '')}</p>
+        ${figura(imagenDe(capa), { ancho: 600, clase: 'figura--capa' })}
         ${sello}
         ${capa.confianza === 'sin_confirmar' && capa.motivo ? `
         <p class="motivo-duda"><span class="motivo-etiqueta">Por qué no se pudo confirmar</span>${esc(capa.motivo)}</p>` : ''}
@@ -558,6 +625,7 @@ function construirCronicas() {
     revísalas antes de citar. Si encuentras un error, escríbenos y la corrección
     se publica al pie sin borrar lo corregido.</p>
   </div>` : ''}
+  ${imagenDe(c) ? `<div class="marco columna">${figura(imagenDe(c), { ancho: 1200 })}</div>` : ''}
   <div class="pieza-cuerpo marco columna">${markdown(c.cuerpo)}</div>
   ${c.fuentes && c.fuentes.length ? `
   <section class="fuentes marco columna">
@@ -915,8 +983,20 @@ ${items}
 ${urls.map(u => `<url><loc>${SITIO.url}${u}</loc></url>`).join('\n')}
 </urlset>`);
 
+  // Los rastreadores de vista previa (WhatsApp, Facebook, Telegram, X,
+  // Slack, LinkedIn) respetan robots.txt. Si se les cierra la puerta, al
+  // compartir un enlace no aparece ni imagen ni título. Se les deja pasar
+  // aunque los buscadores sigan bloqueados: previsualizar no es indexar.
+  const previsualizadores = [
+    'facebookexternalhit', 'Facebot', 'WhatsApp', 'Twitterbot',
+    'TelegramBot', 'Slackbot-LinkExpanding', 'LinkedInBot',
+    'Discordbot', 'SkypeUriPreview', 'redditbot',
+  ];
   escribir('robots.txt', SITIO.provisional
-    ? `# Dirección provisional: no indexar todavía.\nUser-agent: *\nDisallow: /\n`
+    ? `# Dirección provisional: no indexar todavía.\n` +
+      `# Los previsualizadores de enlaces sí pasan: previsualizar no es indexar.\n` +
+      previsualizadores.map(u => `User-agent: ${u}\nAllow: /\n`).join('\n') +
+      `\nUser-agent: *\nDisallow: /\n`
     : `User-agent: *\nAllow: /\nSitemap: ${SITIO.url}/sitemap.xml\n`);
 
   escribir('404.html', pagina({

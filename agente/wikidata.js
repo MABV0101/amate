@@ -64,7 +64,7 @@ const PRECISION_DIA = `?nodo wikibase:timePrecision ?prec . FILTER(?prec >= 11)`
 
 function consultaNacimientos(mes, dia, lugarQID) {
   return `
-SELECT ?item ?itemLabel ?fecha ?lugarLabel ?ocupacionLabel ?enlaces WHERE {
+SELECT ?item ?itemLabel ?fecha ?lugarLabel ?ocupacionLabel ?enlaces ?imagen WHERE {
   ?item p:P569/psv:P569 ?nodo .
   ?nodo wikibase:timeValue ?fecha .
   ${PRECISION_DIA}
@@ -73,6 +73,7 @@ SELECT ?item ?itemLabel ?fecha ?lugarLabel ?ocupacionLabel ?enlaces WHERE {
   ?item wdt:P19 ?lugar .
   ?lugar wdt:P131* wd:${lugarQID} .
   ?item wikibase:sitelinks ?enlaces .
+  OPTIONAL { ?item wdt:P18 ?imagen . }
   OPTIONAL { ?item wdt:P106 ?ocupacion . }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "es,en". }
 }
@@ -82,7 +83,7 @@ LIMIT 12`;
 
 function consultaDefunciones(mes, dia, lugarQID) {
   return `
-SELECT ?item ?itemLabel ?fecha ?lugarLabel ?ocupacionLabel ?enlaces WHERE {
+SELECT ?item ?itemLabel ?fecha ?lugarLabel ?ocupacionLabel ?enlaces ?imagen WHERE {
   ?item p:P570/psv:P570 ?nodo .
   ?nodo wikibase:timeValue ?fecha .
   ${PRECISION_DIA}
@@ -91,6 +92,7 @@ SELECT ?item ?itemLabel ?fecha ?lugarLabel ?ocupacionLabel ?enlaces WHERE {
   ?item wdt:P20 ?lugar .
   ?lugar wdt:P131* wd:${lugarQID} .
   ?item wikibase:sitelinks ?enlaces .
+  OPTIONAL { ?item wdt:P18 ?imagen . }
   OPTIONAL { ?item wdt:P106 ?ocupacion . }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "es,en". }
 }
@@ -102,7 +104,7 @@ LIMIT 12`;
    territorio: batallas, fundaciones, inauguraciones, decretos. */
 function consultaHechos(mes, dia, lugarQID) {
   return `
-SELECT ?item ?itemLabel ?fecha ?tipoLabel ?lugarLabel ?enlaces WHERE {
+SELECT ?item ?itemLabel ?fecha ?tipoLabel ?lugarLabel ?enlaces ?imagen WHERE {
   { ?item p:P585/psv:P585 ?nodo . } UNION { ?item p:P571/psv:P571 ?nodo . }
   ?nodo wikibase:timeValue ?fecha .
   ${PRECISION_DIA}
@@ -111,6 +113,7 @@ SELECT ?item ?itemLabel ?fecha ?tipoLabel ?lugarLabel ?enlaces WHERE {
   { ?item wdt:P276 ?lugar . } UNION { ?item wdt:P131 ?lugar . }
   ?lugar wdt:P131* wd:${lugarQID} .
   ?item wikibase:sitelinks ?enlaces .
+  OPTIONAL { ?item wdt:P18 ?imagen . }
   OPTIONAL { ?item wdt:P31 ?tipo . }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "es,en". }
 }
@@ -123,13 +126,14 @@ LIMIT 12`;
    notabilidad y evita que salga un futbolista de tercera división. */
 function consultaMundoMuertes(mes, dia) {
   return `
-SELECT ?item ?itemLabel ?fecha ?ocupacionLabel ?enlaces WHERE {
+SELECT ?item ?itemLabel ?fecha ?ocupacionLabel ?enlaces ?imagen WHERE {
   ?item p:P570/psv:P570 ?nodo .
   ?nodo wikibase:timeValue ?fecha .
   ${PRECISION_DIA}
   FILTER(MONTH(?fecha) = ${mes} && DAY(?fecha) = ${dia})
   FILTER(YEAR(?fecha) < ${ANIO_LIMITE})
   ?item wikibase:sitelinks ?enlaces .
+  OPTIONAL { ?item wdt:P18 ?imagen . }
   FILTER(?enlaces > 60)
   OPTIONAL { ?item wdt:P106 ?ocupacion . }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "es,en". }
@@ -140,13 +144,14 @@ LIMIT 8`;
 
 function consultaMundoHechos(mes, dia) {
   return `
-SELECT ?item ?itemLabel ?fecha ?tipoLabel ?enlaces WHERE {
+SELECT ?item ?itemLabel ?fecha ?tipoLabel ?enlaces ?imagen WHERE {
   ?item p:P585/psv:P585 ?nodo .
   ?nodo wikibase:timeValue ?fecha .
   ${PRECISION_DIA}
   FILTER(MONTH(?fecha) = ${mes} && DAY(?fecha) = ${dia})
   FILTER(YEAR(?fecha) < ${ANIO_LIMITE})
   ?item wikibase:sitelinks ?enlaces .
+  OPTIONAL { ?item wdt:P18 ?imagen . }
   FILTER(?enlaces > 25)
   OPTIONAL { ?item wdt:P31 ?tipo . }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "es,en". }
@@ -213,6 +218,47 @@ function aCapa(r, ambito, frase) {
   };
 }
 
+
+/* ---- ficha de la imagen en Commons ------------------------------- */
+/* Wikidata da el archivo; Commons da el autor y la licencia. Sin esos
+   dos datos la imagen no se publica: en un archivo, una fotografía sin
+   procedencia declarada es un problema esperando turno. */
+
+function archivoDeURL(url) {
+  const m = String(url).match(/Special:FilePath\/(.+)$/);
+  if (!m) return null;
+  try { return decodeURIComponent(m[1]).replace(/_/g, ' '); }
+  catch { return m[1].replace(/_/g, ' '); }
+}
+
+function limpiaHTML(t) {
+  return String(t || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+}
+
+async function fichaCommons(archivo) {
+  const url = 'https://commons.wikimedia.org/w/api.php?action=query&format=json' +
+    '&prop=imageinfo&iiprop=extmetadata&titles=' +
+    encodeURIComponent('File:' + archivo);
+  try {
+    const r = await fetch(url, { headers: { 'User-Agent': AGENTE } });
+    if (!r.ok) return null;
+    const d = await r.json();
+    const paginas = d.query && d.query.pages ? Object.values(d.query.pages) : [];
+    const info = paginas[0] && paginas[0].imageinfo && paginas[0].imageinfo[0];
+    const m = info && info.extmetadata;
+    if (!m) return null;
+    const autor = limpiaHTML(m.Artist && m.Artist.value);
+    const licencia = limpiaHTML(m.LicenseShortName && m.LicenseShortName.value);
+    if (!licencia) return null;   // sin licencia declarada, no se usa
+    return {
+      archivo, origen: 'commons',
+      autor: autor || 'Autor no identificado',
+      fecha: limpiaHTML(m.DateTimeOriginal && m.DateTimeOriginal.value).slice(0, 40),
+      licencia,
+    };
+  } catch { return null; }
+}
+
 /* ---- buscar identificadores ------------------------------------- */
 /* Evita volver a adivinar un QID: `node agente/wikidata.js --buscar Cuautla`
    lista los candidatos con su descripción para escoger el correcto. */
@@ -222,6 +268,7 @@ async function buscar(texto) {
     ?item rdfs:label ?etiqueta .
     FILTER(LANG(?etiqueta) = "es" && LCASE(STR(?etiqueta)) = LCASE("${texto}"))
     ?item wikibase:sitelinks ?enlaces .
+  OPTIONAL { ?item wdt:P18 ?imagen . }
     SERVICE wikibase:label { bd:serviceParam wikibase:language "es,en". }
   } ORDER BY DESC(?enlaces) LIMIT 15`);
   if (!r.length) return log(`Sin resultados para "${texto}".`);
@@ -294,6 +341,7 @@ async function principal() {
       const c = aCapa(f, ambito, frase);
       if (!c || yaEstan.has(c.qid)) continue;
       yaEstan.add(c.qid);
+      c._imagenPendiente = f.imagen || null;
       nuevas.push(c);
       puestas++;
       log(`  + ${ambito} ${c.anio}: ${c.texto.slice(0, 70)} [${c.qid}]`);
@@ -341,6 +389,26 @@ async function principal() {
     log('Sin capas nuevas. No se escribe nada.');
     return finalizar(dia, 0);
   }
+
+  // Fotografías: sólo las que traigan licencia declarada en Commons.
+  let conFoto = 0;
+  for (const c of nuevas) {
+    const archivo = c._imagenPendiente ? archivoDeURL(c._imagenPendiente) : null;
+    delete c._imagenPendiente;
+    if (!archivo) continue;
+    const ficha = await fichaCommons(archivo);
+    if (!ficha) { log(`  (sin licencia declarada: ${archivo})`); continue; }
+    // Dentro de una capa la imagen va con claves planas: el front-matter
+    // sólo admite un nivel de anidamiento y las capas ya son una lista.
+    c.imagen_archivo = ficha.archivo;
+    c.imagen_origen = 'commons';
+    c.imagen_autor = ficha.autor;
+    if (ficha.fecha) c.imagen_fecha = ficha.fecha;
+    c.imagen_licencia = ficha.licencia;
+    conFoto++;
+    log(`  📷 ${c.ambito} ${c.anio}: ${archivo} — ${ficha.licencia}`);
+  }
+  log(`Fotografías adjuntadas: ${conFoto}.`);
 
   const orden = ['Cuautla', 'Morelos', 'México', 'Mundo'];
   const todas = [...capasPrevias, ...nuevas]
