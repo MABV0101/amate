@@ -20,7 +20,7 @@ const SITIO = {
   descripcion:
     'Portal de crónica, memoria oral y acervo documental de Morelos. Un archivo perpetuo del territorio.',
   licencia: 'CC BY-SA 4.0',
-  correo: 'estrategia03@gmail.com',
+  correo: 'precursoresdelahistoriadecuaut@gmail.com',
 
   /* Mientras sea true, el sitio se declara NO INDEXABLE: sin canónicas,
      con noindex y con robots.txt cerrado. Es lo correcto mientras la
