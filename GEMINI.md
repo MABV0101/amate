@@ -207,6 +207,22 @@ Dos orígenes:
   procedencia y con qué permiso se publica. Ese último campo es el que protege
   al portal el día que alguien reclame.
 
+**Ilustración de contexto.** Las capas de Morelos que no traen imagen propia se
+intentan ilustrar buscando en Commons por categoría: primero el nombre propio
+que aparezca en el texto de la capa, después el lugar, después el estado. Sólo
+se aplica a ámbitos Cuautla y Morelos, porque son los que casi nunca tienen
+imagen vinculada en Wikidata.
+
+Esa imagen **no documenta el hecho**, sólo lo acompaña, y por eso lleva un aviso
+impreso que lo dice con todas sus letras. Una foto genérica de Cuautla bajo un
+hecho de 1912 se lee como si fuera de ese hecho: eso es engañar sin querer, y el
+aviso es lo que lo evita. Si no hay nada pertinente con licencia declarada, la
+capa se queda sin foto — una imagen forzada es peor que ninguna.
+
+El filtro `RUIDO` descarta mapas de localización, escudos, banderas, logotipos y
+gráficas, que es lo que devuelve una búsqueda por nombre de municipio si no se
+filtra. Además se exigen 400 píxeles de ancho mínimo y formato de fotografía.
+
 **Nota sobre el formato:** las capas de efeméride guardan la imagen en claves
 planas (`imagen_archivo`, `imagen_autor`, `imagen_licencia`…) porque el
 front-matter admite un solo nivel de anidamiento y las capas ya son una lista.

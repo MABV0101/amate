@@ -292,6 +292,7 @@ function imagenDe(o) {
     procedencia: o.imagen_procedencia,
     licencia: o.imagen_licencia,
     pie: o.imagen_pie,
+    contexto: o.imagen_contexto,
   };
 }
 
@@ -306,8 +307,9 @@ function figura(img, { ancho = 900, clase = '' } = {}) {
     img.licencia ? esc(img.licencia) : '',
   ].filter(Boolean).join(' · ');
 
-  return `<figure class="figura ${clase}">
+  return `<figure class="figura ${clase}${img.contexto ? ' figura--contexto' : ''}">
   <img src="${src}" alt="${esc(img.pie || img.archivo)}" loading="lazy" decoding="async">
+  ${img.contexto ? `<p class="figura-aviso">Imagen de contexto: <strong>no es una fotografía de este hecho</strong>, sino del lugar o el personaje que menciona.</p>` : ''}
   ${img.pie ? `<figcaption class="figura-pie">${enLinea(img.pie)}</figcaption>` : ''}
   ${ficha ? `<p class="figura-ficha">${ficha}${esCommons
       ? ` · <a href="https://commons.wikimedia.org/wiki/File:${encodeURIComponent(String(img.archivo).replace(/^File:/i,''))}">Wikimedia Commons</a>` : ''}</p>` : ''}

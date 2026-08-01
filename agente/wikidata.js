@@ -259,6 +259,67 @@ async function fichaCommons(archivo) {
   } catch { return null; }
 }
 
+
+/* ---- ilustración de contexto desde Commons ------------------------
+   Wikidata sólo trae imagen si el elemento la tiene vinculada (P18), y
+   los morelenses notables rara vez la tienen. Commons sí guarda material
+   —Casasola, haciendas, Cuautla antigua— pero sin conectar al elemento.
+
+   Esto lo busca por categoría. Ojo: NO es la fotografía del hecho, es una
+   imagen del lugar o del personaje. Se marca como contexto para no
+   inducir a error, y si no hay nada pertinente no se pone nada.
+   -------------------------------------------------------------------- */
+
+const EXT_VALIDAS = /\.(jpe?g|png|tiff?)$/i;
+
+/* Palabras que delatan una imagen inservible como ilustración: escudos,
+   mapas de localización, banderas, gráficas. */
+const RUIDO = /(locator|location_map|map_of|mapa_de|coat_of_arms|escudo|flag_|bandera|logo|seal_|\.svg|blank|outline|chart|diagram)/i;
+
+async function buscarEnCommons(termino) {
+  const url = 'https://commons.wikimedia.org/w/api.php?action=query&format=json' +
+    '&generator=search&gsrnamespace=6&gsrlimit=12' +
+    '&gsrsearch=' + encodeURIComponent(termino) +
+    '&prop=imageinfo&iiprop=extmetadata|size';
+  try {
+    const r = await fetch(url, { headers: { 'User-Agent': AGENTE } });
+    if (!r.ok) return [];
+    const d = await r.json();
+    const paginas = d.query && d.query.pages ? Object.values(d.query.pages) : [];
+    return paginas
+      .map(p => ({ titulo: String(p.title || '').replace(/^File:/, ''), info: p.imageinfo && p.imageinfo[0] }))
+      .filter(x => x.info && EXT_VALIDAS.test(x.titulo) && !RUIDO.test(x.titulo))
+      .filter(x => (x.info.width || 0) >= 400);
+  } catch { return []; }
+}
+
+/* Términos de búsqueda a partir de la capa: primero el nombre propio que
+   aparezca en el texto, después el lugar. De lo específico a lo general. */
+function terminosDe(capa) {
+  const t = [];
+  // nombres propios de dos o más palabras capitalizadas
+  const nombres = String(capa.texto || '')
+    .match(/\b[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+(?:de\s+|del\s+|la\s+)?[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)+/g) || [];
+  for (const n of nombres.slice(0, 2)) {
+    if (n.length > 8) t.push(n);
+  }
+  if (capa.lugarWikidata) t.push(capa.lugarWikidata);
+  t.push('Morelos Mexico history');
+  return t;
+}
+
+async function ilustrarContexto(capa) {
+  for (const termino of terminosDe(capa)) {
+    const candidatos = await buscarEnCommons(termino);
+    for (const c of candidatos) {
+      const ficha = await fichaCommons(c.titulo);
+      if (!ficha) continue;               // sin licencia declarada, se descarta
+      return { ...ficha, contexto: termino };
+    }
+  }
+  return null;
+}
+
 /* ---- buscar identificadores ------------------------------------- */
 /* Evita volver a adivinar un QID: `node agente/wikidata.js --buscar Cuautla`
    lista los candidatos con su descripción para escoger el correcto. */
@@ -408,7 +469,27 @@ async function principal() {
     conFoto++;
     log(`  📷 ${c.ambito} ${c.anio}: ${archivo} — ${ficha.licencia}`);
   }
-  log(`Fotografías adjuntadas: ${conFoto}.`);
+  log(`Fotografías propias adjuntadas: ${conFoto}.`);
+
+  // Las capas de Morelos que quedaron sin imagen se intentan ilustrar con
+  // material de contexto de Commons. Si no hay nada pertinente, se quedan
+  // sin foto: una imagen forzada es peor que ninguna.
+  let contexto = 0;
+  for (const c of nuevas) {
+    if (c.imagen_archivo) continue;
+    if (!['Morelos', 'Cuautla'].includes(c.ambito)) continue;
+    const ilu = await ilustrarContexto(c);
+    if (!ilu) { log(`  (sin ilustración de contexto: ${c.ambito} ${c.anio})`); continue; }
+    c.imagen_archivo = ilu.archivo;
+    c.imagen_origen = 'commons';
+    c.imagen_autor = ilu.autor;
+    if (ilu.fecha) c.imagen_fecha = ilu.fecha;
+    c.imagen_licencia = ilu.licencia;
+    c.imagen_contexto = ilu.contexto;   // marca: no es la foto del hecho
+    contexto++;
+    log(`  🖼 contexto ${c.ambito} ${c.anio}: ${ilu.archivo} (búsqueda: ${ilu.contexto})`);
+  }
+  if (contexto) log(`Ilustraciones de contexto: ${contexto}.`);
 
   const orden = ['Cuautla', 'Morelos', 'México', 'Mundo'];
   const todas = [...capasPrevias, ...nuevas]

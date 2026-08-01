@@ -513,3 +513,12 @@ h2 { font-family: var(--display); font-weight: 600; letter-spacing: -.015em; lin
   width: 100%; height: 10rem; object-fit: cover; display: block;
   background: var(--amate-hondo);
 }
+
+/* imagen de contexto: no documenta el hecho, sólo lo acompaña */
+.figura--contexto img { opacity: .93; }
+.figura-aviso {
+  margin: .4rem 0 0; padding: .4rem .6rem;
+  border-left: 3px solid var(--cana);
+  background: var(--amate-hondo);
+  font-size: .78rem; line-height: 1.45; color: var(--corteza-sua);
+}
