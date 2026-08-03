@@ -100,12 +100,17 @@ ORDER BY DESC(?enlaces)
 LIMIT 12`;
 }
 
-/* Hechos con fecha puntual (P585) o de fundación (P571) situados en el
-   territorio: batallas, fundaciones, inauguraciones, decretos. */
+/* Hechos con fecha puntual (P585): batallas, tratados, catástrofes.
+   Se excluye P571 (fecha de fundación/inicio) a propósito: eso trae
+   "Manzanillo (gran ciudad)" o "Guadalupe y Calvo (localidad)" -- el día
+   en que un registro administrativo marca que un pueblo existe, sin
+   ninguna narrativa detrás. No es un hecho histórico, es ruido con una
+   foto grande encima que da la impresión de que el portal "sólo tiene
+   fotos". */
 function consultaHechos(mes, dia, lugarQID) {
   return `
 SELECT ?item ?itemLabel ?fecha ?tipoLabel ?lugarLabel ?enlaces ?imagen WHERE {
-  { ?item p:P585/psv:P585 ?nodo . } UNION { ?item p:P571/psv:P571 ?nodo . }
+  ?item p:P585/psv:P585 ?nodo .
   ?nodo wikibase:timeValue ?fecha .
   ${PRECISION_DIA}
   FILTER(MONTH(?fecha) = ${mes} && DAY(?fecha) = ${dia})
@@ -274,7 +279,7 @@ const EXT_VALIDAS = /\.(jpe?g|png|tiff?)$/i;
 
 /* Palabras que delatan una imagen inservible como ilustración: escudos,
    mapas de localización, banderas, gráficas. */
-const RUIDO = /(locator|location_map|map_of|mapa_de|coat_of_arms|escudo|flag_|bandera|logo|seal_|\.svg|blank|outline|chart|diagram)/i;
+const RUIDO = /(locator|location_map|map_of|mapa_de|coat_of_arms|escudo|flag_|bandera|logo|seal_|\.svg|blank|outline|chart|diagram|montaje|montage|collage|composite)/i;
 
 async function buscarEnCommons(termino) {
   const url = 'https://commons.wikimedia.org/w/api.php?action=query&format=json' +
@@ -451,12 +456,21 @@ async function principal() {
     return finalizar(dia, 0);
   }
 
-  // Fotografías: sólo las que traigan licencia declarada en Commons.
+  // Fotografías: sólo las que traigan licencia declarada en Commons Y no
+  // sean ruido visual (mapas, escudos, montajes/collages). Antes este
+  // filtro sólo se aplicaba a las imágenes de contexto buscadas por
+  // categoría; las que Wikidata liga directamente al elemento (P18) pasaban
+  // sin filtro, y así se coló "Montaje de Manzanillo.jpg" -- un collage de
+  // seis fotos que no ilustra nada en particular.
   let conFoto = 0;
   for (const c of nuevas) {
     const archivo = c._imagenPendiente ? archivoDeURL(c._imagenPendiente) : null;
     delete c._imagenPendiente;
     if (!archivo) continue;
+    if (RUIDO.test(archivo)) {
+      log(`  (imagen descartada por ruido visual: ${archivo})`);
+      continue;
+    }
     const ficha = await fichaCommons(archivo);
     if (!ficha) { log(`  (sin licencia declarada: ${archivo})`); continue; }
     // Dentro de una capa la imagen va con claves planas: el front-matter
