@@ -257,6 +257,39 @@ de Meta (`developers.facebook.com/tools/debug/`).
 Peso máximo recomendado de la imagen: por debajo de 300 KB. Más pesada y
 algunos clientes dejan de mostrarla.
 
+## Decisión editorial de agosto 2026: una hoja, un hecho, con reflexión
+
+`agente/cronica-diaria.js` es desde ahora la **fuente principal** de la hoja
+del día, y cambia el diseño anterior en tres puntos, por decisión explícita
+del director del portal:
+
+1. **Un solo hecho por hoja**, no varias capas mezcladas. Prioridad estricta:
+   Morelos primero; si no hay nada verificable, México; si tampoco, Mundo.
+   La mayoría de los días no va a tener nada de Morelos —Wikidata casi no
+   registra historia municipal morelense— y eso es aceptado a propósito:
+   se prefiere mostrar México o Mundo con honestidad que forzar una conexión
+   con Morelos que no existe. **Nunca se debe estirar un hecho nacional para
+   que parezca local:** ya pasó una vez (el caso del Bando del Aguacatillo) y
+   es el error que este diseño existe para evitar.
+
+2. **Reflexión redactada por IA sobre el hecho ya verificado.** El modelo NO
+   decide el hecho, NO inventa la fecha, NO investiga: recibe el dato ya
+   confirmado por Wikidata (o por el respaldo web con su misma fuente exacta)
+   y sólo escribe qué significa y qué enseñanza o valor se puede extraer.
+   Esto consume la API **todos los días**, a diferencia del motor de
+   Wikidata solo, que no cuesta nada. El gasto es por redactar, no por
+   buscar.
+
+3. **Ninguna imagen sin reseña.** `figura()` en `build.js` exige el campo
+   `pie` para pintar cualquier fotografía, venga de donde venga. Sin reseña
+   que diga qué se ve y por qué importa, la imagen no se publica —aunque
+   tenga licencia perfecta. Esta regla es transversal: aplica también a lo
+   que produzcan los motores viejos.
+
+**Los motores anteriores** (`wikidata.js`, `publicar.js`, `proponer.js`)
+siguen intactos y disponibles para lanzar a mano si algún día se quiere volver
+al formato de varias capas por hoja. No se borraron a propósito.
+
 ## Motor del calendario: Wikidata, no un modelo
 
 `agente/wikidata.js` es el **motor principal** de las efemérides. Consulta

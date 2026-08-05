@@ -298,6 +298,10 @@ function imagenDe(o) {
 
 function figura(img, { ancho = 900, clase = '' } = {}) {
   if (!img || !img.archivo) return '';
+  // Decisión editorial: una foto sin reseña que explique qué se ve y por
+  // qué importa es un adorno sin sentido. Sin "pie", no se publica la
+  // imagen -- aplica a cualquier motor que la produzca.
+  if (!img.pie || !img.pie.trim()) return '';
   const esCommons = img.origen === 'commons';
   const src = esCommons ? urlCommons(img.archivo, ancho) : esc(img.archivo);
   const ficha = [
@@ -308,9 +312,9 @@ function figura(img, { ancho = 900, clase = '' } = {}) {
   ].filter(Boolean).join(' · ');
 
   return `<figure class="figura ${clase}${img.contexto ? ' figura--contexto' : ''}">
-  <img src="${src}" alt="${esc(img.pie || img.archivo)}" loading="lazy" decoding="async">
+  <img src="${src}" alt="${esc(img.pie)}" loading="lazy" decoding="async">
   ${img.contexto ? `<p class="figura-aviso">Imagen de contexto: <strong>no es una fotografía de este hecho</strong>, sino del lugar o el personaje que menciona.</p>` : ''}
-  ${img.pie ? `<figcaption class="figura-pie">${enLinea(img.pie)}</figcaption>` : ''}
+  <figcaption class="figura-pie">${enLinea(img.pie)}</figcaption>
   ${ficha ? `<p class="figura-ficha">${ficha}${esCommons
       ? ` · <a href="https://commons.wikimedia.org/wiki/File:${encodeURIComponent(String(img.archivo).replace(/^File:/i,''))}">Wikimedia Commons</a>` : ''}</p>` : ''}
 </figure>`;
@@ -369,6 +373,7 @@ function hojaEfemeride(ef, { enlace = true } = {}) {
       <span class="capa-anio">${esc(capa.anio)}${capa.precision === 'mes' ? '<span class="capa-precision">sólo mes</span>' : ''}</span>
       <div class="capa-texto${capa.confianza === 'sin_confirmar' ? ' capa-texto--dudosa' : ''}">
         <p>${enLinea(capa.texto || '')}</p>
+        ${capa.reflexion ? `<p class="capa-reflexion"><span class="capa-reflexion-etiqueta">Para pensar hoy</span>${enLinea(capa.reflexion)}</p>` : ''}
         ${figura(imagenDe(capa), { ancho: 600, clase: 'figura--capa' })}
         ${sello}
         ${capa.confianza === 'sin_confirmar' && capa.motivo ? `

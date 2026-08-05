@@ -522,3 +522,18 @@ h2 { font-family: var(--display); font-weight: 600; letter-spacing: -.015em; lin
   background: var(--amate-hondo);
   font-size: .78rem; line-height: 1.45; color: var(--corteza-sua);
 }
+
+/* ---------- reflexión de la crónica diaria ------------------------ */
+
+.capa-reflexion {
+  margin: 1rem 0 0; padding: .8rem 1rem;
+  border-left: 3px solid var(--cochinilla);
+  background: var(--amate-claro);
+  font-style: italic; color: var(--corteza);
+  line-height: 1.6;
+}
+.capa-reflexion-etiqueta {
+  display: block; font-family: var(--util); font-style: normal;
+  font-size: .66rem; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--cochinilla); margin-bottom: .35rem;
+}

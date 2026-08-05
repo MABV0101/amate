@@ -1,0 +1,57 @@
+name: Crónica diaria de Morelos
+
+# Decisión editorial (agosto 2026): esta es la fuente principal de la hoja
+# del día. Muestra UN SOLO hecho, priorizando Morelos sobre México y Mundo
+# sobre el resto, con una reflexión redactada por IA sobre el hecho ya
+# verificado. Reemplaza al motor que mezclaba varios ámbitos.
+#
+# 07:00 UTC = 1:00 a.m. en Morelos. Investiga la fecha de MAÑANA.
+#
+# IMPORTANTE: este flujo SÍ consume la API de Anthropic todos los días,
+# porque la reflexión la escribe un modelo. Wikidata (gratis) sólo aporta
+# el hecho verificado; el gasto es por la redacción, no por la búsqueda.
+
+on:
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+    inputs:
+      dia:
+        description: 'Día a publicar (MM-DD). Vacío = mañana.'
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: calendario
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Buscar hecho y redactar la crónica del día
+        id: agente
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node agente/cronica-diaria.js ${{ inputs.dia }}
+
+      - name: Comprobar que el sitio sigue compilando
+        run: node build.js
+
+      - name: Guardar en el archivo
+        if: steps.agente.outputs.publicadas != '0'
+        run: |
+          git config user.name  'Agente de Amate'
+          git config user.email 'agente@amate.local'
+          git add contenido/efemerides/
+          git commit -m "Crónica diaria: hoja ${{ steps.agente.outputs.dia }}" || exit 0
+          git pull --rebase --autostash
+          git push
