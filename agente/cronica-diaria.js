@@ -1,18 +1,17 @@
 /* ---------------------------------------------------------------
-   Amate · crónica diaria con prioridad estricta y reflexión
+   Amate · crónica diaria, solo Morelos, con reflexión
    Decisión editorial (agosto 2026): la hoja del día muestra UN SOLO
-   hecho, el mejor disponible en este orden: Morelos > México > Mundo.
-   Nunca se mezclan ámbitos como hacía el motor anterior.
+   hecho, y únicamente si es de Morelos. Sin respaldo a México/Mundo:
+   si Wikidata no tiene nada morelense ese día, la hoja se queda vacía
+   hasta que aparezca un dato real (falla cerrada).
 
-   Paso 1 — Wikidata (sin costo): busca hecho verificable por SPARQL,
-            empezando por Morelos.
-   Paso 2 — si no hay nada en ningún ámbito, se intenta con el buscador
-            web como respaldo (mismo criterio del agente viejo).
-   Paso 3 — con el hecho ya en la mano, un modelo de lenguaje redacta
+   Paso 1 — Wikidata (sin costo): busca hecho verificable por SPARQL
+            en Morelos.
+   Paso 2 — con el hecho ya en la mano, un modelo de lenguaje redacta
             la reflexión: qué significa, qué enseñanza o valor se
             extrae, por qué importa hoy. El modelo NO inventa el
             hecho ni la fecha; sólo reflexiona sobre lo ya verificado.
-   Paso 4 — si el hecho trae fotografía, se exige una reseña de la
+   Paso 3 — si el hecho trae fotografía, se exige una reseña de la
             imagen. Sin reseña, no se publica la foto.
 
    Uso:  node agente/cronica-diaria.js
@@ -29,7 +28,6 @@ const ANIO_LIMITE = 1990;
 const AGENTE_HTTP = 'AmateCronicasMorelos/1.0 (https://amatecronicas.netlify.app)';
 const ENDPOINT_WD = 'https://query.wikidata.org/sparql';
 const QID_MORELOS = 'Q66117';
-const QID_MEXICO = 'Q96';
 
 const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio',
   'agosto','septiembre','octubre','noviembre','diciembre'];
@@ -94,27 +92,6 @@ ORDER BY DESC(?enlaces)
 LIMIT 8`;
 }
 
-/* Sin filtro de lugar: sólo aplica a México y Mundo, donde no hace
-   falta acotar por ubicación (México ya viene acotado por P131* al país;
-   Mundo directamente no se acota). */
-function consultaHechosMundo(mes, dia) {
-  return `
-SELECT ?item ?itemLabel ?fecha ?tipoLabel ?enlaces ?imagen WHERE {
-  ?item p:P585/psv:P585 ?nodo .
-  ?nodo wikibase:timeValue ?fecha .
-  ${PRECISION_DIA}
-  FILTER(MONTH(?fecha) = ${mes} && DAY(?fecha) = ${dia})
-  FILTER(YEAR(?fecha) < ${ANIO_LIMITE})
-  ?item wikibase:sitelinks ?enlaces .
-  FILTER(?enlaces > 30)
-  OPTIONAL { ?item wdt:P18 ?imagen . }
-  OPTIONAL { ?item wdt:P31 ?tipo . }
-  SERVICE wikibase:label { bd:serviceParam wikibase:language "es,en". }
-}
-ORDER BY DESC(?enlaces)
-LIMIT 8`;
-}
-
 const RUIDO_IMAGEN = /(locator|location_map|map_of|mapa_de|coat_of_arms|escudo|flag_|bandera|logo|seal_|\.svg|blank|outline|chart|diagram|montaje|montage|collage|composite)/i;
 
 function archivoDeURL(url) {
@@ -163,41 +140,34 @@ function aCandidato(fila, ambito, tipo) {
   };
 }
 
-/* Busca en Wikidata para un ámbito. Devuelve el mejor candidato (más
+/* Busca en Wikidata, sólo Morelos. Devuelve el mejor candidato (más
    enlaces entre wikipedias) entre nacimientos, defunciones y hechos. */
-async function buscarEnWikidata(ambito, mes, dia) {
+async function buscarEnMorelos(mes, dia) {
   const candidatos = [];
   try {
-    if (ambito === 'Mundo') {
-      const h = await sparql(consultaHechosMundo(mes, dia));
-      candidatos.push(...h.map(f => aCandidato(f, 'Mundo', 'hecho')));
-    } else {
-      const qid = ambito === 'Morelos' ? QID_MORELOS : QID_MEXICO;
-      const [n, d, h] = await Promise.all([
-        sparql(consultaPersonas('P569', 'P19', mes, dia, qid)),
-        sparql(consultaPersonas('P570', 'P20', mes, dia, qid)),
-        sparql(consultaHechos(mes, dia, qid)),
-      ]);
-      candidatos.push(...n.map(f => aCandidato(f, ambito, 'nacimiento')));
-      candidatos.push(...d.map(f => aCandidato(f, ambito, 'defuncion')));
-      candidatos.push(...h.map(f => aCandidato(f, ambito, 'hecho')));
-    }
+    const [n, d, h] = await Promise.all([
+      sparql(consultaPersonas('P569', 'P19', mes, dia, QID_MORELOS)),
+      sparql(consultaPersonas('P570', 'P20', mes, dia, QID_MORELOS)),
+      sparql(consultaHechos(mes, dia, QID_MORELOS)),
+    ]);
+    candidatos.push(...n.map(f => aCandidato(f, 'Morelos', 'nacimiento')));
+    candidatos.push(...d.map(f => aCandidato(f, 'Morelos', 'defuncion')));
+    candidatos.push(...h.map(f => aCandidato(f, 'Morelos', 'hecho')));
   } catch (e) {
-    log(`  Wikidata (${ambito}) falló: ${e.message}`);
+    log(`  Wikidata (Morelos) falló: ${e.message}`);
     return null;
   }
   const validos = candidatos.filter(Boolean).sort((a, b) => b.enlaces - a.enlaces);
   return validos[0] || null;
 }
 
-/* ---- respaldo por búsqueda web, sólo si Wikidata no dio nada ------- */
+/* ---- llamadas al modelo, sólo para redactar sobre el hecho ya verificado */
 
-async function preguntarModelo(prompt, { buscar = false } = {}, clave = null) {
+async function preguntarModelo(prompt, clave = null) {
   const cuerpo = {
     model: MODELO, max_tokens: 3000,
     messages: [{ role: 'user', content: prompt }],
   };
-  if (buscar) cuerpo.tools = [{ type: 'web_search_20250305', name: 'web_search' }];
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -211,27 +181,6 @@ async function preguntarModelo(prompt, { buscar = false } = {}, clave = null) {
   const data = await r.json();
   const texto = data.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
   return extraerJSON(texto, clave);
-}
-
-/* Respaldo: si Wikidata no tiene nada en NINGÚN ámbito para este día,
-   se intenta una búsqueda web acotada a Morelos primero. Este camino
-   SÍ puede alucinar, así que exige verificación con el mismo rigor que
-   el agente viejo: fuente exacta y nada sin corroborar. */
-async function respaldoWeb(fechaTexto) {
-  const r = await preguntarModelo(`Busca UN hecho verificable ocurrido un
-${fechaTexto} de cualquier año anterior a ${ANIO_LIMITE}, relacionado con el
-estado de Morelos, México. Si no encuentras nada morelense confirmado con
-fuente clara, entonces busca uno de historia de México en general.
-
-Sólo un hecho, el mejor que encuentres, con fuente exacta (URL) donde lo
-verificaste en esta sesión. No inventes.
-
-Responde SÓLO JSON:
-{"encontrado":true|false,"ambito":"Morelos|Mexico",
-"nombre":"descripción breve del hecho","anio":"1914","lugar":"...",
-"fuente":"https://..."}`, { buscar: true }, 'encontrado');
-  if (!r.encontrado) return null;
-  return { ...r, tipo: 'hecho', enlaces: 0, qid: null, imagenUrl: null };
 }
 
 /* ---- redacción de la reflexión -------------------------------- */
@@ -250,7 +199,6 @@ México. Hoy, ${fechaTexto} de ${c.anio}, ocurrió lo siguiente (ya verificado,
 NO LO CAMBIES ni le agregues datos que no están aquí):
 
 "${descripcion}"
-Ámbito: ${c.ambito}.
 
 Escribe DOS PÁRRAFOS BREVES en español:
 
@@ -259,14 +207,19 @@ Escribe DOS PÁRRAFOS BREVES en español:
    puedas justificar con lo ya dado.
 2. Una reflexión: qué enseñanza, valor o significado se puede extraer de este
    hecho para leerlo hoy. Sobria, sin moralina, sin frases de calendario de
-   escritorio. Si el hecho es menor o no da para una enseñanza honesta, dilo
-   así en lugar de forzar una.
+   escritorio.
+
+   Si el hecho es menor y no da para una enseñanza honesta, deja
+   "reflexion" como cadena vacía (""). NO escribas un párrafo explicando
+   que no hay nada que reflexionar, ni "esto es demasiado escueto", ni
+   nada por el estilo — eso es tan relleno como la moralina forzada.
+   Silencio es mejor que una frase que solo dice "no tengo nada que decir".
 
 Máximo 90 palabras en total. No repitas la fecha ni el nombre en cada frase
 como si fuera una ficha.
 
 Responde SÓLO JSON:
-{"contexto":"...","reflexion":"..."}`, {}, 'reflexion');
+{"contexto":"...","reflexion":"..."}`, 'reflexion');
 }
 
 /* Reseña de la fotografía: obligatoria para publicarla. Se le pide al
@@ -283,7 +236,7 @@ qué se incluye aquí. Si el nombre del archivo no te da suficiente información
 para describir la imagen con honestidad, responde {"suficiente":false}.
 
 Responde SÓLO JSON: {"suficiente":true,"reseña":"..."} o {"suficiente":false}`,
-    {}, 'suficiente');
+    'suficiente');
 }
 
 /* ---- ejecución -------------------------------------------------- */
@@ -301,27 +254,13 @@ async function principal() {
   const [mm, dd] = dia.split('-');
   const mes = Number(mm), num = Number(dd);
   const fechaTexto = `${num} de ${MESES[mes - 1]}`;
-  log(`Día ${dia} (${fechaTexto}). Prioridad: Morelos > México > Mundo.`);
+  log(`Día ${dia} (${fechaTexto}). Solo Morelos.`);
 
-  let candidato = null;
-  for (const ambito of ['Morelos', 'México', 'Mundo']) {
-    const c = await buscarEnWikidata(ambito === 'México' ? 'México' : ambito, mes, num);
-    if (c) {
-      log(`  Wikidata (${ambito}): "${c.nombre}" ${c.anio}, ${c.enlaces} wikis.`);
-      candidato = c;
-      break;
-    }
-    log(`  Wikidata (${ambito}): nada.`);
-  }
-
-  if (!candidato && process.env.ANTHROPIC_API_KEY) {
-    log('  Wikidata sin resultados en ningún ámbito. Intentando respaldo web...');
-    try { candidato = await respaldoWeb(fechaTexto); }
-    catch (e) { log(`  Respaldo web falló: ${e.message}`); }
-  }
-
-  if (!candidato) {
-    log('Sin hecho disponible hoy. No se publica nada.');
+  const candidato = await buscarEnMorelos(mes, num);
+  if (candidato) {
+    log(`  Wikidata (Morelos): "${candidato.nombre}" ${candidato.anio}, ${candidato.enlaces} wikis.`);
+  } else {
+    log('  Wikidata (Morelos): nada. No se publica.');
     return finalizar(dia, 0);
   }
 
@@ -363,7 +302,7 @@ async function principal() {
     : candidato.nombre;
 
   const capa = {
-    ambito: candidato.ambito === 'México' ? 'México' : candidato.ambito,
+    ambito: 'Morelos',
     anio: String(candidato.anio),
     texto: `${descripcion} ${reflexion.contexto || ''}`.trim(),
     reflexion: reflexion.reflexion || '',
