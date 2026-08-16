@@ -222,6 +222,19 @@ Responde SÓLO JSON:
 {"contexto":"...","reflexion":"..."}`, 'reflexion');
 }
 
+/* Red de seguridad determinista: el modelo, pese a la instrucción, tiende
+   a rellenar con variaciones de "esto es menor y no da para lección" en
+   vez de dejar el campo vacío. En lugar de perseguir cada nueva variante
+   con más instrucciones, se detecta el patrón por código y se fuerza la
+   cadena vacía sin importar qué haya escrito el modelo. */
+const PATRON_RELLENO = /(no hay (aquí|en él|en ella)?\s*(una?)?\s*(enseñanza|lección|moraleja)|no da para (una?)?\s*(enseñanza|lección)|demasiado escueto|es[,]? honestamente|registro (menor|modesto)|hecho menor|dato de archivo|ya justifica el ejercicio|no tengo nada que (decir|reflexionar)|sin forzarla|sin forzar(la|lo)?\s*(una?)?\s*(enseñanza|lección)?)/i;
+
+function limpiarReflexion(texto) {
+  const t = (texto || '').trim();
+  if (!t || PATRON_RELLENO.test(t)) return '';
+  return t;
+}
+
 /* Reseña de la fotografía: obligatoria para publicarla. Se le pide al
    mismo modelo, en la misma llamada de reflexión sería más barato, pero
    se separa para poder omitir la foto sin gastar la reflexión si no hay
@@ -305,7 +318,7 @@ async function principal() {
     ambito: 'Morelos',
     anio: String(candidato.anio),
     texto: `${descripcion} ${reflexion.contexto || ''}`.trim(),
-    reflexion: reflexion.reflexion || '',
+    reflexion: limpiarReflexion(reflexion.reflexion),
     verificacion: candidato.qid ? 'wikidata' : 'automatica',
     ...(candidato.qid ? { fuente: `https://www.wikidata.org/wiki/${candidato.qid}` } : {}),
     ...(candidato.fuente ? { fuente: candidato.fuente } : {}),
