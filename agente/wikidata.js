@@ -414,7 +414,11 @@ async function principal() {
     }
   };
 
-  // Morelos primero: es lo que da valor al portal.
+  // Solo Morelos: decisión editorial del 2026-09-09. Antes rellenaba con
+  // México y Mundo cuando Morelos no traía nada, pero eso es justo lo que
+  // el portal no quiere mostrar el día que abre alguien nuevo: una hoja
+  // "de Morelos" sin una sola capa de Morelos. Si no hay nada local, el
+  // día se queda vacío — ponytail: fail closed, no relleno geográfico.
   for (const [etiqueta, consulta, frase] of [
     ['nacimientos', consultaNacimientos, fraseNacimiento],
     ['defunciones', consultaDefunciones, fraseDefuncion],
@@ -425,30 +429,6 @@ async function principal() {
       log(`Morelos · ${etiqueta}: ${filas.length} resultados.`);
       agregar(filas, 'Morelos', frase);
     } catch (e) { log(`Morelos · ${etiqueta} falló: ${e.message}`); }
-  }
-
-  // México
-  for (const [etiqueta, consulta, frase] of [
-    ['hechos',      consultaHechos,      fraseHecho],
-    ['defunciones', consultaDefunciones, fraseDefuncion],
-  ]) {
-    try {
-      const filas = await sparql(consulta(mes, num, QID.mexico));
-      log(`México · ${etiqueta}: ${filas.length} resultados.`);
-      agregar(filas, 'México', frase);
-    } catch (e) { log(`México · ${etiqueta} falló: ${e.message}`); }
-  }
-
-  // Mundo
-  for (const [etiqueta, consulta, frase] of [
-    ['hechos',      consultaMundoHechos,  fraseHecho],
-    ['defunciones', consultaMundoMuertes, fraseDefuncion],
-  ]) {
-    try {
-      const filas = await sparql(consulta(mes, num));
-      log(`Mundo · ${etiqueta}: ${filas.length} resultados.`);
-      agregar(filas, 'Mundo', frase);
-    } catch (e) { log(`Mundo · ${etiqueta} falló: ${e.message}`); }
   }
 
   if (!nuevas.length) {
